@@ -18,5 +18,4 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-# routes internes existantes
-app.include_router(game.router, prefix="/game", tags=["game"])
+app.include_router(game.router, tags=["legacy"])
