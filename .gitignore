@@ -16,3 +16,4 @@ docker-data/
 .hypothesis/
 *.egg-info/
 .DS_Store
+.coverage
