@@ -13,3 +13,5 @@ build/
 .idea/
 *.log
 docker-data/
+.hypothesis/
+*.egg-info/
