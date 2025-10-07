@@ -9,17 +9,17 @@ venv:
 
 setup: venv
 	. $(VENV)/bin/activate; $(PIP) install --upgrade pip
-	. $(VENV)/bin/activate; $(PIP) install .[dev]
+	. $(VENV)/bin/activate; $(PIP) install -e .
 	. $(VENV)/bin/activate; pre-commit install
 
 precommit:
 	. $(VENV)/bin/activate; pre-commit run --all-files
 
 run:
-	. $(VENV)/bin/activate; PYTHONPATH=src $(PY) -m uvicorn app.main:app --reload --port 8000
+	. $(VENV)/bin/activate; fastapi dev -e app.main:app
 
 test:
-	. $(VENV)/bin/activate; PYTHONPATH=src pytest
+	. $(VENV)/bin/activate; $(PY) -m pytest
 
 fmt:
 	. $(VENV)/bin/activate; ruff format .
@@ -40,4 +40,4 @@ down:
 	docker compose down
 
 cov:
-	. $(VENV)/bin/activate; PYTHONPATH=src pytest --cov=src --cov-report=term-missing
+	. $(VENV)/bin/activate; $(PY) -m pytest --cov=src --cov-report=term-missing
