@@ -7,13 +7,12 @@ name = "dopynion-equipe-3"
 version = "0.1.0"
 description = "API de jeu (projet école) - FastAPI"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 authors = [{ name = "Equipe 3" }]
 dependencies = [
-  "fastapi[standard]>=0.115",
-  "uvicorn[standard]>=0.30",
-  "pydantic>=2.6",
+  "fastapi[standard]",
   "python-dotenv>=1.0",
+  "dopynion"
 ]
 
 [project.optional-dependencies]
