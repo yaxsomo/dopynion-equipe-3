@@ -15,7 +15,7 @@ class PlayResponse(BaseModel):
 
 
 @router.post("/play", response_model=PlayResponse)
-def play(req: PlayRequest):
+def play(req: PlayRequest) -> PlayResponse:
     if req.action not in {"buy", "trash", "end", "play"}:
         return PlayResponse(valid=False, message="Action invalide")
     return PlayResponse(valid=True, message=f"Action {req.action} acceptée")

@@ -7,12 +7,12 @@ app = FastAPI(title="Equipe 3 API", version="0.1.0")
 
 
 @app.get("/", tags=["meta"])
-def root():
+def root() -> dict[str, str]:
     return {"name": "Equipe 3 API", "docs": "/docs", "health": "/health"}
 
 
 @app.get("/health", tags=["meta"])
-def health():
+def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
