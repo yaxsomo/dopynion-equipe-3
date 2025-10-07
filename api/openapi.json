@@ -1,0 +1,1668 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "FastAPI",
+        "version": "0.1.0"
+    },
+    "paths": {
+        "/": {
+            "get": {
+                "summary": "Root",
+                "operationId": "root__get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "text/html": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/name": {
+            "get": {
+                "summary": "Name",
+                "operationId": "name_name_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string",
+                                    "title": "Response Name Name Get"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/start_game": {
+            "get": {
+                "summary": "Start Game",
+                "operationId": "start_game_start_game_get",
+                "parameters": [
+                    {
+                        "name": "x-game-id",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "ID of the game",
+                            "title": "X-Game-Id"
+                        },
+                        "description": "ID of the game"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DopynionResponseStr"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/start_turn": {
+            "get": {
+                "summary": "Start Turn",
+                "operationId": "start_turn_start_turn_get",
+                "parameters": [
+                    {
+                        "name": "x-game-id",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "ID of the game",
+                            "title": "X-Game-Id"
+                        },
+                        "description": "ID of the game"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DopynionResponseStr"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/play": {
+            "post": {
+                "summary": "Play",
+                "operationId": "play_play_post",
+                "parameters": [
+                    {
+                        "name": "x-game-id",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "ID of the game",
+                            "title": "X-Game-Id"
+                        },
+                        "description": "ID of the game"
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Game"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DopynionResponseStr"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/end_game": {
+            "get": {
+                "summary": "End Game",
+                "operationId": "end_game_end_game_get",
+                "parameters": [
+                    {
+                        "name": "x-game-id",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "ID of the game",
+                            "title": "X-Game-Id"
+                        },
+                        "description": "ID of the game"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DopynionResponseStr"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/confirm_discard_card_from_hand": {
+            "post": {
+                "summary": "Confirm Discard Card From Hand",
+                "operationId": "confirm_discard_card_from_hand_confirm_discard_card_from_hand_post",
+                "parameters": [
+                    {
+                        "name": "x-game-id",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "ID of the game",
+                            "title": "X-Game-Id"
+                        },
+                        "description": "ID of the game"
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CardNameAndHand"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DopynionResponseBool"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/discard_card_from_hand": {
+            "post": {
+                "summary": "Discard Card From Hand",
+                "operationId": "discard_card_from_hand_discard_card_from_hand_post",
+                "parameters": [
+                    {
+                        "name": "x-game-id",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "ID of the game",
+                            "title": "X-Game-Id"
+                        },
+                        "description": "ID of the game"
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Hand"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DopynionResponseCardName"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/confirm_trash_card_from_hand": {
+            "post": {
+                "summary": "Confirm Trash Card From Hand",
+                "operationId": "confirm_trash_card_from_hand_confirm_trash_card_from_hand_post",
+                "parameters": [
+                    {
+                        "name": "x-game-id",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "ID of the game",
+                            "title": "X-Game-Id"
+                        },
+                        "description": "ID of the game"
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CardNameAndHand"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DopynionResponseBool"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/trash_card_from_hand": {
+            "post": {
+                "summary": "Trash Card From Hand",
+                "operationId": "trash_card_from_hand_trash_card_from_hand_post",
+                "parameters": [
+                    {
+                        "name": "x-game-id",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "ID of the game",
+                            "title": "X-Game-Id"
+                        },
+                        "description": "ID of the game"
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Hand"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DopynionResponseCardName"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/confirm_discard_deck": {
+            "post": {
+                "summary": "Confirm Discard Deck",
+                "operationId": "confirm_discard_deck_confirm_discard_deck_post",
+                "parameters": [
+                    {
+                        "name": "x-game-id",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "ID of the game",
+                            "title": "X-Game-Id"
+                        },
+                        "description": "ID of the game"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DopynionResponseBool"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/choose_card_to_receive_in_discard": {
+            "post": {
+                "summary": "Choose Card To Receive In Discard",
+                "operationId": "choose_card_to_receive_in_discard_choose_card_to_receive_in_discard_post",
+                "parameters": [
+                    {
+                        "name": "x-game-id",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "ID of the game",
+                            "title": "X-Game-Id"
+                        },
+                        "description": "ID of the game"
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PossibleCards"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DopynionResponseCardName"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/choose_card_to_receive_in_deck": {
+            "post": {
+                "summary": "Choose Card To Receive In Deck",
+                "operationId": "choose_card_to_receive_in_deck_choose_card_to_receive_in_deck_post",
+                "parameters": [
+                    {
+                        "name": "x-game-id",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "ID of the game",
+                            "title": "X-Game-Id"
+                        },
+                        "description": "ID of the game"
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PossibleCards"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DopynionResponseCardName"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/skip_card_reception_in_hand": {
+            "post": {
+                "summary": "Skip Card Reception In Hand",
+                "operationId": "skip_card_reception_in_hand_skip_card_reception_in_hand_post",
+                "parameters": [
+                    {
+                        "name": "x-game-id",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "ID of the game",
+                            "title": "X-Game-Id"
+                        },
+                        "description": "ID of the game"
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CardNameAndHand"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DopynionResponseBool"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/trash_money_card_for_better_money_card": {
+            "post": {
+                "summary": "Trash Money Card For Better Money Card",
+                "operationId": "trash_money_card_for_better_money_card_trash_money_card_for_better_money_card_post",
+                "parameters": [
+                    {
+                        "name": "x-game-id",
+                        "in": "header",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "ID of the game",
+                            "title": "X-Game-Id"
+                        },
+                        "description": "ID of the game"
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/MoneyCardsInHand"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DopynionResponseCardName"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "CardName": {
+                "type": "string",
+                "enum": [
+                    "abandonedmine",
+                    "acolyte",
+                    "actingtroupe",
+                    "action_token",
+                    "adventurer",
+                    "advisor",
+                    "alchemist",
+                    "ally_architectsguild",
+                    "ally_bandofnomads",
+                    "ally_cavedwellers",
+                    "ally_circleofwitches",
+                    "ally_citystate",
+                    "ally_coastalhaven",
+                    "ally_craftersguild",
+                    "ally_desertguides",
+                    "ally_familyofinventors",
+                    "ally_fellowshipofscribes",
+                    "ally_forestdwellers",
+                    "ally_gangofpickpockets",
+                    "ally_islandfolk",
+                    "ally_leagueofbankers",
+                    "ally_leagueofshopkeepers",
+                    "ally_markettowns",
+                    "ally_mountainfolk",
+                    "ally_orderofastrologers",
+                    "ally_orderofmasons",
+                    "ally_peacefulcult",
+                    "ally_plateaushepherds",
+                    "ally_trapperslodge",
+                    "ally_woodworkersguild",
+                    "altar",
+                    "ambassador",
+                    "amulet",
+                    "animalfair",
+                    "anvil",
+                    "apothecary",
+                    "apprentice",
+                    "archer",
+                    "archive",
+                    "armory",
+                    "artificer",
+                    "artisan",
+                    "astrolabe",
+                    "augurs",
+                    "avanto",
+                    "badomens",
+                    "bagofgold",
+                    "baker",
+                    "bandit",
+                    "banditcamp",
+                    "bandofmisfits",
+                    "bank",
+                    "barbarian",
+                    "bard",
+                    "barge",
+                    "baron",
+                    "bat",
+                    "battleplan",
+                    "bauble",
+                    "bazaar",
+                    "beggar",
+                    "berserker",
+                    "bishop",
+                    "blackcat",
+                    "blackmarket",
+                    "blacksmith",
+                    "blessedvillage",
+                    "blockade",
+                    "boon_theearthsgift",
+                    "boon_thefieldsgift",
+                    "boon_theflamesgift",
+                    "boon_theforestsgift",
+                    "boon_themoonsgift",
+                    "boon_themountainsgift",
+                    "boon_theriversgift",
+                    "boon_theseasgift",
+                    "boon_theskysgift",
+                    "boon_thesunsgift",
+                    "boon_theswampsgift",
+                    "boon_thewindsgift",
+                    "borderguard",
+                    "bordervillage",
+                    "bountyhunter",
+                    "bridge",
+                    "bridgetroll",
+                    "broker",
+                    "bureaucrat",
+                    "bustlingvillage",
+                    "butcher",
+                    "buy_token",
+                    "cache",
+                    "cameltrain",
+                    "candlestickmaker",
+                    "capital",
+                    "capitalcity",
+                    "captain",
+                    "caravan",
+                    "caravanguard",
+                    "card_token",
+                    "cardinal",
+                    "cargoship",
+                    "carpenter",
+                    "cartographer",
+                    "castles",
+                    "catacombs",
+                    "catapult",
+                    "catapultrocks",
+                    "cauldron",
+                    "cavalry",
+                    "cellar",
+                    "cemetery",
+                    "champion",
+                    "chancellor",
+                    "changeling",
+                    "chapel",
+                    "chariotrace",
+                    "charlatan",
+                    "charm",
+                    "church",
+                    "city",
+                    "cityquarter",
+                    "clashes",
+                    "clerk",
+                    "cobbler",
+                    "coffers_mat",
+                    "coffersvillagers_mat",
+                    "coinoftherealm",
+                    "coinstokens",
+                    "collection",
+                    "colony",
+                    "colony_2nd",
+                    "conclave",
+                    "conjurer",
+                    "conspirator",
+                    "contraband",
+                    "contract",
+                    "copper",
+                    "copper2",
+                    "copper2_2nd",
+                    "copper2nd",
+                    "coppersmith",
+                    "corsair",
+                    "councilroom",
+                    "count",
+                    "counterfeit",
+                    "countinghouse",
+                    "courier",
+                    "courtier",
+                    "courtyard",
+                    "coven",
+                    "crossroads",
+                    "crown",
+                    "crumblingcastle",
+                    "crypt",
+                    "crystalball",
+                    "cultist",
+                    "curse",
+                    "curse2",
+                    "curse2_2nd",
+                    "curse2nd",
+                    "cursedgold",
+                    "cursedvillage",
+                    "cutpurse",
+                    "dameanna",
+                    "damejosephine",
+                    "damemolly",
+                    "damenatalie",
+                    "damesylvia",
+                    "deathcart",
+                    "debttokens",
+                    "deluded",
+                    "delusion",
+                    "denofsin",
+                    "destrier",
+                    "develop",
+                    "devilsworkshop",
+                    "diadem",
+                    "diplomat",
+                    "disciple",
+                    "dismantle",
+                    "displace",
+                    "distantlands",
+                    "distantshore",
+                    "doctor",
+                    "druid",
+                    "ducat",
+                    "duchess",
+                    "duchy",
+                    "duchy2",
+                    "duchy2_2nd",
+                    "duchy2nd",
+                    "duke",
+                    "dungeon",
+                    "duplicate",
+                    "elder",
+                    "embargo",
+                    "embargotokens",
+                    "embassy",
+                    "emissary",
+                    "emporium",
+                    "encampment",
+                    "encampmentplunder",
+                    "enchantress",
+                    "engineer",
+                    "envious",
+                    "envoy",
+                    "envy",
+                    "estate",
+                    "estate2",
+                    "estate2_2nd",
+                    "estate2nd",
+                    "estate_token",
+                    "event_advance",
+                    "event_alliance",
+                    "event_alms",
+                    "event_annex",
+                    "event_ball",
+                    "event_banish",
+                    "event_banquet",
+                    "event_bargain",
+                    "event_bonfire",
+                    "event_borrow",
+                    "event_commerce",
+                    "event_conquest",
+                    "event_delay",
+                    "event_delve",
+                    "event_demand",
+                    "event_desperation",
+                    "event_dominate",
+                    "event_donate",
+                    "event_enclave",
+                    "event_enhance",
+                    "event_expedition",
+                    "event_ferry",
+                    "event_gamble",
+                    "event_inheritance",
+                    "event_invest",
+                    "event_lostarts",
+                    "event_march",
+                    "event_mission",
+                    "event_pathfinding",
+                    "event_pilgrimage",
+                    "event_plan",
+                    "event_populate",
+                    "event_pursue",
+                    "event_quest",
+                    "event_raid",
+                    "event_reap",
+                    "event_ride",
+                    "event_ritual",
+                    "event_salttheearth",
+                    "event_save",
+                    "event_scoutingparty",
+                    "event_seaway",
+                    "event_seizetheday",
+                    "event_stampede",
+                    "event_summon",
+                    "event_tax",
+                    "event_toil",
+                    "event_trade",
+                    "event_training",
+                    "event_transport",
+                    "event_travellingfair",
+                    "event_triumph",
+                    "event_wedding",
+                    "event_windfall",
+                    "exile_mat",
+                    "exorcist",
+                    "expand",
+                    "experiment",
+                    "explorer",
+                    "fairgrounds",
+                    "faithfulhound",
+                    "falconer",
+                    "familiar",
+                    "famine",
+                    "farmersmarket",
+                    "farmingvillage",
+                    "farmland",
+                    "fear",
+                    "feast",
+                    "feodum",
+                    "festival",
+                    "fisherman",
+                    "fishingvillage",
+                    "flag",
+                    "flagbearer",
+                    "followers",
+                    "fool",
+                    "foolsgold",
+                    "forager",
+                    "forge",
+                    "fortress",
+                    "forts",
+                    "fortune",
+                    "fortuneteller",
+                    "forum",
+                    "fugitive",
+                    "galleria",
+                    "gardens",
+                    "garrison",
+                    "gatekeeper",
+                    "gear",
+                    "ghost",
+                    "ghostship",
+                    "ghosttown",
+                    "giant",
+                    "gladiator",
+                    "gladiatorfortune",
+                    "goat",
+                    "goatherd",
+                    "gold",
+                    "gold2",
+                    "gold2_2nd",
+                    "gold2nd",
+                    "golem",
+                    "goons",
+                    "governor",
+                    "grandcastle",
+                    "grandmarket",
+                    "graverobber",
+                    "greathall",
+                    "greed",
+                    "groom",
+                    "groundskeeper",
+                    "guarddog",
+                    "guardian",
+                    "guide",
+                    "guildmaster",
+                    "haggler",
+                    "hamlet",
+                    "harbinger",
+                    "harem",
+                    "harvest",
+                    "hauntedcastle",
+                    "hauntedmirror",
+                    "hauntedwoods",
+                    "haunting",
+                    "haven",
+                    "herald",
+                    "herbalist",
+                    "herbgatherer",
+                    "hermit",
+                    "hero",
+                    "hideout",
+                    "highway",
+                    "highwayman",
+                    "hillfort",
+                    "hireling",
+                    "hoard",
+                    "horn",
+                    "hornofplenty",
+                    "horse",
+                    "horsetraders",
+                    "hostelry",
+                    "hovel",
+                    "humblecastle",
+                    "hunter",
+                    "huntinggrounds",
+                    "huntinglodge",
+                    "huntingparty",
+                    "idol",
+                    "illgottengains",
+                    "imp",
+                    "importer",
+                    "improve",
+                    "inn",
+                    "innkeeper",
+                    "inventor",
+                    "investment",
+                    "ironmonger",
+                    "ironworks",
+                    "island",
+                    "island_mat",
+                    "jackofalltrades",
+                    "jester",
+                    "journey_token",
+                    "journeyman",
+                    "junkdealer",
+                    "key",
+                    "kiln",
+                    "kingscastle",
+                    "kingscourt",
+                    "knights",
+                    "laboratory",
+                    "lackeys",
+                    "landmark_aqueduct",
+                    "landmark_arena",
+                    "landmark_banditfort",
+                    "landmark_basilica",
+                    "landmark_baths",
+                    "landmark_battlefield",
+                    "landmark_colonnade",
+                    "landmark_defiledshrine",
+                    "landmark_fountain",
+                    "landmark_keep",
+                    "landmark_labyrinth",
+                    "landmark_mountainpass",
+                    "landmark_museum",
+                    "landmark_obelisk",
+                    "landmark_orchard",
+                    "landmark_palace",
+                    "landmark_tomb",
+                    "landmark_tower",
+                    "landmark_triumphalarch",
+                    "landmark_wall",
+                    "landmark_wolfden",
+                    "lantern",
+                    "legionary",
+                    "leprechaun",
+                    "library",
+                    "lich",
+                    "lighthouse",
+                    "livery",
+                    "loan",
+                    "locusts",
+                    "lookout",
+                    "lostcity",
+                    "lostinthewoods",
+                    "luckycoin",
+                    "lurker",
+                    "madman",
+                    "magiclamp",
+                    "magnate",
+                    "magpie",
+                    "mandarin",
+                    "marauder",
+                    "margrave",
+                    "market",
+                    "marketsquare",
+                    "marquis",
+                    "masquerade",
+                    "mastermind",
+                    "masterpiece",
+                    "menagerie",
+                    "mercenary",
+                    "merchant",
+                    "merchantcamp",
+                    "merchantguild",
+                    "merchantship",
+                    "messenger",
+                    "militia",
+                    "mill",
+                    "miller",
+                    "mine",
+                    "miningvillage",
+                    "minion",
+                    "mint",
+                    "minuscard_token",
+                    "minuscoin_token",
+                    "minuscost_token",
+                    "miser",
+                    "miserable",
+                    "misery",
+                    "moat",
+                    "modify",
+                    "monastery",
+                    "moneylender",
+                    "monkey",
+                    "monument",
+                    "mountainvillage",
+                    "mountebank",
+                    "mystic",
+                    "native_village_mat",
+                    "nativevillage",
+                    "navigator",
+                    "necromancer",
+                    "necropolis",
+                    "nightwatchman",
+                    "noblebrigand",
+                    "nobles",
+                    "nomadcamp",
+                    "nomads",
+                    "oasis",
+                    "odysseys",
+                    "oldmap",
+                    "oldwitch",
+                    "opulentcastle",
+                    "oracle",
+                    "outpost",
+                    "overgrownestate",
+                    "overlord",
+                    "paddock",
+                    "page",
+                    "pasture",
+                    "patrician",
+                    "patricianemporium",
+                    "patrol",
+                    "patron",
+                    "pawn",
+                    "pearldiver",
+                    "peasant",
+                    "peddler",
+                    "philosophersstone",
+                    "pillage",
+                    "pirate",
+                    "pirate_ship_mat",
+                    "pirateship",
+                    "pixie",
+                    "plague",
+                    "platinum",
+                    "platinum_2nd",
+                    "plaza",
+                    "plunder",
+                    "pluscoin_token",
+                    "poacher",
+                    "pooka",
+                    "poorhouse",
+                    "port",
+                    "possession",
+                    "potion",
+                    "potion_2nd",
+                    "pouch",
+                    "poverty",
+                    "priest",
+                    "prince",
+                    "princess",
+                    "procession",
+                    "project_academy",
+                    "project_barracks",
+                    "project_canal",
+                    "project_capitalism",
+                    "project_cathedral",
+                    "project_citadel",
+                    "project_citygate",
+                    "project_croprotation",
+                    "project_exploration",
+                    "project_fair",
+                    "project_fleet",
+                    "project_guildhall",
+                    "project_innovation",
+                    "project_pageant",
+                    "project_piazza",
+                    "project_roadnetwork",
+                    "project_sewers",
+                    "project_silos",
+                    "project_sinisterplot",
+                    "project_starchart",
+                    "province",
+                    "province2",
+                    "province2_2nd",
+                    "province2nd",
+                    "quarry",
+                    "rabble",
+                    "raider",
+                    "ranger",
+                    "ratcatcher",
+                    "rats",
+                    "raze",
+                    "rebuild",
+                    "recruiter",
+                    "relic",
+                    "remake",
+                    "remodel",
+                    "replace",
+                    "research",
+                    "rocks",
+                    "rogue",
+                    "royalblacksmith",
+                    "royalcarriage",
+                    "royalgalley",
+                    "royalseal",
+                    "ruinedlibrary",
+                    "ruinedmarket",
+                    "ruinedvillage",
+                    "saboteur",
+                    "sacredgrove",
+                    "sacrifice",
+                    "sage",
+                    "sailor",
+                    "salvager",
+                    "sanctuary",
+                    "sauna",
+                    "saunaavanto",
+                    "scavenger",
+                    "scepter",
+                    "scheme",
+                    "scholar",
+                    "scout",
+                    "scrap",
+                    "scryingpool",
+                    "sculptor",
+                    "seachart",
+                    "seahag",
+                    "seawitch",
+                    "secretcave",
+                    "secretchamber",
+                    "secretpassage",
+                    "seer",
+                    "sentinel",
+                    "sentry",
+                    "settlers",
+                    "settlersbustlingvillage",
+                    "shantytown",
+                    "sheepdog",
+                    "shepherd",
+                    "sibyl",
+                    "silkmerchant",
+                    "silkroad",
+                    "silver",
+                    "silver2",
+                    "silver2_2nd",
+                    "silver2nd",
+                    "sirbailey",
+                    "sirdestry",
+                    "sirmartin",
+                    "sirmichael",
+                    "sirvander",
+                    "skirmisher",
+                    "skulk",
+                    "sleigh",
+                    "smallcastle",
+                    "smithy",
+                    "smugglers",
+                    "snowyvillage",
+                    "soldier",
+                    "soothsayer",
+                    "sorcerer",
+                    "sorceress",
+                    "souk",
+                    "specialist",
+                    "spicemerchant",
+                    "spices",
+                    "spoils",
+                    "sprawlingcastle",
+                    "spy",
+                    "squire",
+                    "stables",
+                    "stash",
+                    "steward",
+                    "stockpile",
+                    "stonemason",
+                    "storeroom",
+                    "storyteller",
+                    "stronghold",
+                    "student",
+                    "sunkentreasure",
+                    "supplies",
+                    "survivors",
+                    "swamphag",
+                    "swap",
+                    "swashbuckler",
+                    "swindler",
+                    "sycophant",
+                    "tactician",
+                    "talisman",
+                    "tavern_mat",
+                    "taxman",
+                    "teacher",
+                    "temple",
+                    "tent",
+                    "territory",
+                    "thief",
+                    "throneroom",
+                    "tiara",
+                    "tidepools",
+                    "tormentor",
+                    "torturer",
+                    "tournament",
+                    "town",
+                    "towncrier",
+                    "townsfolk",
+                    "tracker",
+                    "trade_route_mat",
+                    "trader",
+                    "traderoute",
+                    "tradingpost",
+                    "tragichero",
+                    "trail",
+                    "transmogrify",
+                    "transmute",
+                    "trashing_token",
+                    "treasurechest",
+                    "treasurehunter",
+                    "treasuremap",
+                    "treasurer",
+                    "treasuretrove",
+                    "treasury",
+                    "tribute",
+                    "trustysteed",
+                    "tunnel",
+                    "twicemiserable",
+                    "underling",
+                    "university",
+                    "upgrade",
+                    "urchin",
+                    "vagrant",
+                    "vampire",
+                    "vassal",
+                    "vault",
+                    "venture",
+                    "villa",
+                    "village",
+                    "villagegreen",
+                    "villain",
+                    "vineyard",
+                    "voyage",
+                    "vp_mat_1",
+                    "vp_mat_2",
+                    "vp_mat_3",
+                    "vp_mat_4",
+                    "vp_mat_5",
+                    "vp_mat_6",
+                    "vp_mat_7",
+                    "vp_mat_8",
+                    "vptokens",
+                    "walledvillage",
+                    "wanderingminstrel",
+                    "war",
+                    "warchest",
+                    "warehouse",
+                    "warlord",
+                    "warrior",
+                    "watchtower",
+                    "way_wayofthebutterfly",
+                    "way_wayofthecamel",
+                    "way_wayofthechameleon",
+                    "way_wayofthefrog",
+                    "way_wayofthegoat",
+                    "way_wayofthehorse",
+                    "way_wayofthemole",
+                    "way_wayofthemonkey",
+                    "way_wayofthemouse",
+                    "way_wayofthemule",
+                    "way_wayoftheotter",
+                    "way_wayoftheowl",
+                    "way_wayoftheox",
+                    "way_wayofthepig",
+                    "way_wayoftherat",
+                    "way_wayoftheseal",
+                    "way_wayofthesheep",
+                    "way_wayofthesquirrel",
+                    "way_wayoftheturtle",
+                    "way_wayoftheworm",
+                    "wayfarer",
+                    "weaver",
+                    "werewolf",
+                    "wharf",
+                    "wheelwright",
+                    "wildhunt",
+                    "willowisp",
+                    "winemerchant",
+                    "wish",
+                    "wishingwell",
+                    "witch",
+                    "witchshut",
+                    "wizards",
+                    "woodcutter",
+                    "workersvillage",
+                    "workshop",
+                    "youngwitch",
+                    "zombieapprentice",
+                    "zombiemason",
+                    "zombiespy",
+                    "NONE"
+                ],
+                "title": "CardName"
+            },
+            "CardNameAndHand": {
+                "properties": {
+                    "card_name": {
+                        "$ref": "#/components/schemas/CardName"
+                    },
+                    "hand": {
+                        "items": {
+                            "$ref": "#/components/schemas/CardName"
+                        },
+                        "type": "array",
+                        "title": "Hand"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "card_name",
+                    "hand"
+                ],
+                "title": "CardNameAndHand"
+            },
+            "Cards": {
+                "properties": {
+                    "quantities": {
+                        "additionalProperties": {
+                            "type": "integer"
+                        },
+                        "type": "object",
+                        "title": "Quantities"
+                    }
+                },
+                "type": "object",
+                "title": "Cards"
+            },
+            "DopynionResponseBool": {
+                "properties": {
+                    "game_id": {
+                        "type": "string",
+                        "title": "Game Id"
+                    },
+                    "decision": {
+                        "type": "boolean",
+                        "title": "Decision"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "game_id",
+                    "decision"
+                ],
+                "title": "DopynionResponseBool"
+            },
+            "DopynionResponseCardName": {
+                "properties": {
+                    "game_id": {
+                        "type": "string",
+                        "title": "Game Id"
+                    },
+                    "decision": {
+                        "$ref": "#/components/schemas/CardName"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "game_id",
+                    "decision"
+                ],
+                "title": "DopynionResponseCardName"
+            },
+            "DopynionResponseStr": {
+                "properties": {
+                    "game_id": {
+                        "type": "string",
+                        "title": "Game Id"
+                    },
+                    "decision": {
+                        "type": "string",
+                        "title": "Decision"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "game_id",
+                    "decision"
+                ],
+                "title": "DopynionResponseStr"
+            },
+            "Game": {
+                "properties": {
+                    "finished": {
+                        "type": "boolean",
+                        "title": "Finished"
+                    },
+                    "players": {
+                        "items": {
+                            "$ref": "#/components/schemas/Player"
+                        },
+                        "type": "array",
+                        "title": "Players"
+                    },
+                    "stock": {
+                        "$ref": "#/components/schemas/Cards"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "finished",
+                    "players",
+                    "stock"
+                ],
+                "title": "Game"
+            },
+            "HTTPValidationError": {
+                "properties": {
+                    "detail": {
+                        "items": {
+                            "$ref": "#/components/schemas/ValidationError"
+                        },
+                        "type": "array",
+                        "title": "Detail"
+                    }
+                },
+                "type": "object",
+                "title": "HTTPValidationError"
+            },
+            "Hand": {
+                "properties": {
+                    "hand": {
+                        "items": {
+                            "$ref": "#/components/schemas/CardName"
+                        },
+                        "type": "array",
+                        "title": "Hand"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "hand"
+                ],
+                "title": "Hand"
+            },
+            "MoneyCardsInHand": {
+                "properties": {
+                    "money_in_hand": {
+                        "items": {
+                            "$ref": "#/components/schemas/CardName"
+                        },
+                        "type": "array",
+                        "title": "Money In Hand"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "money_in_hand"
+                ],
+                "title": "MoneyCardsInHand"
+            },
+            "Player": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "hand": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/Cards"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "score": {
+                        "type": "integer",
+                        "title": "Score"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "name",
+                    "hand",
+                    "score"
+                ],
+                "title": "Player"
+            },
+            "PossibleCards": {
+                "properties": {
+                    "possible_cards": {
+                        "items": {
+                            "$ref": "#/components/schemas/CardName"
+                        },
+                        "type": "array",
+                        "title": "Possible Cards"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "possible_cards"
+                ],
+                "title": "PossibleCards"
+            },
+            "ValidationError": {
+                "properties": {
+                    "loc": {
+                        "items": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "integer"
+                                }
+                            ]
+                        },
+                        "type": "array",
+                        "title": "Location"
+                    },
+                    "msg": {
+                        "type": "string",
+                        "title": "Message"
+                    },
+                    "type": {
+                        "type": "string",
+                        "title": "Error Type"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "loc",
+                    "msg",
+                    "type"
+                ],
+                "title": "ValidationError"
+            }
+        }
+    }
+}
