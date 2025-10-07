@@ -3,10 +3,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from .routers import (
-    game,
-    legacy,  # <- nouveau router
-)
+from .routers import game
 
 app = FastAPI(title="Equipe 3 API", version="0.1.0")
 
@@ -23,5 +20,3 @@ def health() -> dict[str, str]:
 
 # routes internes existantes
 app.include_router(game.router, prefix="/game", tags=["game"])
-# routes legacy “dopynion”
-app.include_router(legacy.router, tags=["legacy"])
