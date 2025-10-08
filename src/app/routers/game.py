@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import Annotated
 
 from dopynion.data_model import (
@@ -24,6 +25,43 @@ from app.inspectors import (
 )
 
 router = APIRouter()
+
+# crude priority table (higher is better)
+CARD_PRIORITY = defaultdict(
+    lambda: 0,
+    {
+        "province": 100,
+        "gold": 80,
+        "laboratory": 70,
+        "market": 60,
+        "smithy": 55,
+        "festival": 50,
+        "village": 40,
+        "silver": 30,
+        "copper": 5,
+    },
+)
+
+JUNK = {"estate", "curse"}
+
+
+def _best_from(options: list[CardName]) -> CardName:
+    # pick the highest-priority option; tie-breaker = alphabetical for stability
+    return sorted(options, key=lambda c: (-CARD_PRIORITY[c], c))[0]
+
+
+def _worst_in_hand(hand: list[CardName]) -> CardName:
+    # prefer to discard/trash junk > copper > low actions
+    # score = lower is worse
+    def score(c: CardName) -> tuple[int, int]:
+        if c in JUNK:  # estates, curses are worst
+            return (0, CARD_PRIORITY[c])
+        if c == "copper":
+            return (1, CARD_PRIORITY[c])
+        # everything else: keep, but prefer to lose lowest-priority
+        return (2, CARD_PRIORITY[c])
+
+    return sorted(hand, key=lambda c: score(c))[0]
 
 
 # -----------------------------
@@ -111,7 +149,7 @@ async def discard_card_from_hand(
 ) -> DopynionResponseCardName:
     log_meta(request, game_id)
     log_hand(decision_input)
-    pick = decision_input.hand[0]
+    pick = _worst_in_hand(decision_input.hand)
     log_decision(game_id, "DISCARD_FROM_HAND", {"chosen": pick})
     return DopynionResponseCardName(game_id=game_id, decision=pick)
 
@@ -136,7 +174,7 @@ async def trash_card_from_hand(
 ) -> DopynionResponseCardName:
     log_meta(request, game_id)
     log_hand(decision_input)
-    pick = decision_input.hand[0]
+    pick = _worst_in_hand(decision_input.hand)
     log_decision(game_id, "TRASH_FROM_HAND", {"chosen": pick})
     return DopynionResponseCardName(game_id=game_id, decision=pick)
 
@@ -159,7 +197,7 @@ async def choose_card_to_receive_in_discard(
 ) -> DopynionResponseCardName:
     log_meta(request, game_id)
     log_possible_cards(decision_input)
-    pick = decision_input.possible_cards[0]
+    pick = _best_from(decision_input.possible_cards)
     log_decision(game_id, "RECEIVE_IN_DISCARD", {"chosen": pick})
     return DopynionResponseCardName(game_id=game_id, decision=pick)
 
@@ -172,7 +210,7 @@ async def choose_card_to_receive_in_deck(
 ) -> DopynionResponseCardName:
     log_meta(request, game_id)
     log_possible_cards(decision_input)
-    pick = decision_input.possible_cards[0]
+    pick = _best_from(decision_input.possible_cards)
     log_decision(game_id, "RECEIVE_IN_DECK", {"chosen": pick})
     return DopynionResponseCardName(game_id=game_id, decision=pick)
 
@@ -197,6 +235,8 @@ async def trash_money_card_for_better_money_card(
 ) -> DopynionResponseCardName:
     log_meta(request, game_id)
     log_money_cards(decision_input)
-    pick = decision_input.money_in_hand[0]
+    # if there's a copper, trash it; otherwise pick the lowest-priority money
+    money = decision_input.money_in_hand
+    pick = "copper" if "copper" in money else sorted(money, key=lambda c: CARD_PRIORITY[c])[0]
     log_decision(game_id, "TRASH_MONEY_FOR_BETTER", {"chosen": pick})
     return DopynionResponseCardName(game_id=game_id, decision=pick)
