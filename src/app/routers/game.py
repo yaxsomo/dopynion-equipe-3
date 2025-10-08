@@ -169,15 +169,30 @@ def _in_stock(_game: Game, card: str) -> bool:
     return (_game.stock.quantities or {}).get(card, 0) > 0
 
 
-def _early_province_ok(counts: dict[str, int], provinces_left: int) -> bool:
-    """Return True if we should start buying Provinces even before the very endgame.
-    Heuristics: we have at least some economy (>=1 gold or >=2 labs), or provinces low.
+def _early_province_ok(
+    counts: dict[str, int],
+    provinces_left: int,
+    turn: int,
+    score_gap: int,
+) -> bool:
+    """Return True if we should start buying Provinces *before* the late endgame.
+
+    We pace Province buys to avoid ending the game too early when our engine isn't ready.
+    Allow early Provinces only if:
+      - Provinces are already low, OR
+      - Our engine/economy is online, OR
+      - The game is sufficiently advanced, OR
+      - We are trailing significantly and need raw VP now.
     """
-    return (
-        counts.get("gold", 0) >= 1
-        or counts.get("laboratory", 0) >= 2
-        or provinces_left <= EARLY_PROVINCE_STOCK
-    )
+    if provinces_left <= EARLY_PROVINCE_STOCK:
+        return True
+    if _engine_ready(counts):
+        return True
+    if turn >= 12:
+        return True
+    if score_gap <= -BEHIND_DUCHY_DEFICIT:
+        return True
+    return False
 
 
 def _compute_treasure_coins(game: Game, me_idx: int) -> int:
@@ -185,6 +200,22 @@ def _compute_treasure_coins(game: Game, me_idx: int) -> int:
     me = game.players[me_idx]
     q = (me.hand.quantities if me.hand else {}) or {}
     return q.get("copper", 0) * 1 + q.get("silver", 0) * 2 + q.get("gold", 0) * 3
+
+
+def _engine_ready(counts: dict[str, int]) -> bool:
+    """Heuristic: our deck is strong enough to start greening (reaching $8 consistently)."""
+    if counts.get("gold", 0) >= 2:
+        return True
+    if counts.get("laboratory", 0) >= 2:
+        return True
+    if counts.get("market", 0) + counts.get("festival", 0) >= 2:
+        return True
+    if (
+        counts.get("village", 0) >= 1
+        and (counts.get("smithy", 0) + counts.get("councilroom", 0) + counts.get("library", 0)) >= 1
+    ):
+        return True
+    return False
 
 
 # New helper: action selection logic
@@ -572,11 +603,15 @@ def choose_buy_action(_game: Game, coins: int, me_idx: int, state: dict[str, obj
     if decision is not None:
         return decision
 
-    # 0) If we can/should take a Province earlier due to economy or low stock
     if (
         coins >= BUY_PROVINCE_COINS
         and _in_stock(_game, "province")
-        and _early_province_ok(counts, provinces_left)
+        and _early_province_ok(
+            counts,
+            provinces_left,
+            int(state.get("turn", 1)),
+            my_score - best_opp,
+        )
     ):
         return "BUY province"
 
