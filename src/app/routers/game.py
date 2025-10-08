@@ -26,6 +26,10 @@ from app.inspectors import (
 
 # Track whether we've already bought during the current turn for each game
 TURN_STATE: dict[str, dict[str, bool]] = defaultdict(lambda: {"bought": False})
+
+# Our team name as exposed by /name; used to locate our player seat dynamically
+TEAM_NAME = "Equipe3MaGueule"
+
 router = APIRouter()
 # ----- buying thresholds (avoid magic numbers) -----
 BUY_PROVINCE_COINS = 8
@@ -124,6 +128,28 @@ def start_turn(game_id: GameIdDependency, request: Request) -> DopynionResponseS
     return DopynionResponseStr(game_id=game_id, decision="OK")
 
 
+def _find_me(game: Game) -> int:
+    """Return the index of our bot in game.players.
+
+    Strategy:
+    1) Prefer a name match containing TEAM_NAME (the server prefixes our name with the base URL).
+    2) If exactly one player currently has a hand, assume that's us.
+    3) Fallback to index 1 if it exists, otherwise 0.
+    """
+    # 1) Name-based match (e.g., "[https://.../] Equipe3MaGueule (...)")
+    for i, p in enumerate(game.players):
+        if getattr(p, "name", None) and TEAM_NAME in p.name:
+            return i
+
+    # 2) Single player with a hand
+    with_hand = [i for i, p in enumerate(game.players) if getattr(p, "hand", None)]
+    if len(with_hand) == 1:
+        return with_hand[0]
+
+    # 3) Safe default
+    return 1 if len(game.players) > 1 else 0
+
+
 def choose_buy_action(_game: Game, coins: int) -> str:
     """Return the best BUY decision based on current coins and stock."""
     decision = "END_TURN"
@@ -163,7 +189,8 @@ def play(_game: Game, game_id: GameIdDependency, request: Request) -> DopynionRe
         log_decision(game_id, decision)
         return DopynionResponseStr(game_id=game_id, decision=decision)
 
-    me = _game.players[1]  # we are usually index 1
+    me_idx = _find_me(_game)
+    me = _game.players[me_idx]
     q = (me.hand.quantities if me.hand else {}) or {}
     coins = q.get("copper", 0) * 1 + q.get("silver", 0) * 2 + q.get("gold", 0) * 3
 
@@ -181,6 +208,7 @@ def play(_game: Game, game_id: GameIdDependency, request: Request) -> DopynionRe
 @router.get("/end_game")
 def end_game(game_id: GameIdDependency, request: Request) -> DopynionResponseStr:
     log_meta(request, game_id)
+    TURN_STATE.pop(game_id, None)
     log_decision(game_id, "OK")
     return DopynionResponseStr(game_id=game_id, decision="OK")
 
