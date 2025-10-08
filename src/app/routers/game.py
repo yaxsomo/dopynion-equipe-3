@@ -24,6 +24,8 @@ from app.inspectors import (
     log_possible_cards,
 )
 
+# Track whether we've already bought during the current turn for each game
+TURN_STATE: dict[str, dict[str, bool]] = defaultdict(lambda: {"bought": False})
 router = APIRouter()
 # ----- buying thresholds (avoid magic numbers) -----
 BUY_PROVINCE_COINS = 8
@@ -111,28 +113,21 @@ def name() -> str:
 @router.get("/start_game")
 def start_game(game_id: GameIdDependency, request: Request) -> DopynionResponseStr:
     log_meta(request, game_id)
-    log_decision(game_id, "OK")
     return DopynionResponseStr(game_id=game_id, decision="OK")
 
 
 @router.get("/start_turn")
 def start_turn(game_id: GameIdDependency, request: Request) -> DopynionResponseStr:
     log_meta(request, game_id)
+    TURN_STATE[game_id]["bought"] = False  # <-- reset per turn
     log_decision(game_id, "OK")
     return DopynionResponseStr(game_id=game_id, decision="OK")
 
 
-@router.post("/play")
-def play(_game: Game, game_id: GameIdDependency, request: Request) -> DopynionResponseStr:
-    log_meta(request, game_id)
-    log_game(_game)
-
-    me = _game.players[1]  # we seem to be index 1 in your logs
-    q = (me.hand.quantities if me.hand else {}) or {}
-    coins = q.get("copper", 0) * 1 + q.get("silver", 0) * 2 + q.get("gold", 0) * 3
-
-    # Simple buy rules
+def choose_buy_action(_game: Game, coins: int) -> str:
+    """Return the best BUY decision based on current coins and stock."""
     decision = "END_TURN"
+
     if coins >= BUY_PROVINCE_COINS and _game.stock.quantities.get("province", 0) > 0:
         decision = "BUY province"
     elif coins >= BUY_GOLD_COINS and _game.stock.quantities.get("gold", 0) > 0:
@@ -153,7 +148,31 @@ def play(_game: Game, game_id: GameIdDependency, request: Request) -> DopynionRe
             decision = "BUY silver"
     elif coins >= BUY_SILVER_COINS and _game.stock.quantities.get("silver", 0) > 0:
         decision = "BUY silver"
-    # else: keep END_TURN on 0-2 coins   # <- normal hyphen
+
+    return decision
+
+
+@router.post("/play")
+def play(_game: Game, game_id: GameIdDependency, request: Request) -> DopynionResponseStr:
+    log_meta(request, game_id)
+    log_game(_game)
+
+    # Stop if we already bought this turn
+    if TURN_STATE[game_id]["bought"]:
+        decision = "END_TURN"
+        log_decision(game_id, decision)
+        return DopynionResponseStr(game_id=game_id, decision=decision)
+
+    me = _game.players[1]  # we are usually index 1
+    q = (me.hand.quantities if me.hand else {}) or {}
+    coins = q.get("copper", 0) * 1 + q.get("silver", 0) * 2 + q.get("gold", 0) * 3
+
+    # Delegated decision logic
+    decision = choose_buy_action(_game, coins)
+
+    # Mark buy done if needed
+    if decision.startswith("BUY"):
+        TURN_STATE[game_id]["bought"] = True
 
     log_decision(game_id, decision)
     return DopynionResponseStr(game_id=game_id, decision=decision)
