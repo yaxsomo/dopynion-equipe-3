@@ -16,12 +16,14 @@ from pydantic import BaseModel
 
 from app.inspectors import (
     log_card_name_and_hand,
+    log_context,
     log_decision,
-    log_game,
+    log_game_compact,
     log_hand,
     log_meta,
     log_money_cards,
     log_possible_cards,
+    log_turn_state,
 )
 
 # Track whether we've already bought during the current turn for each game
@@ -222,7 +224,9 @@ def start_turn(game_id: GameIdDependency, request: Request) -> DopynionResponseS
     # provisional defaults; will be set precisely in /play when hand is available
     state["buys_left"] = 1
     state["coins_left"] = 0
+    state["initialized_resources"] = False
     log_decision(game_id, "OK")
+    log_turn_state(game_id, state)
     return DopynionResponseStr(game_id=game_id, decision="OK")
 
 
@@ -377,7 +381,7 @@ def choose_buy_action(_game: Game, coins: int, me_idx: int, state: dict[str, obj
 @router.post("/play")
 def play(_game: Game, game_id: GameIdDependency, request: Request) -> DopynionResponseStr:
     log_meta(request, game_id)
-    log_game(_game)
+    log_game_compact(_game)
 
     state = _get_state(game_id)
 
@@ -394,6 +398,8 @@ def play(_game: Game, game_id: GameIdDependency, request: Request) -> DopynionRe
     coins_left = int(state.get("coins_left", 0))  # type: ignore[arg-type]
     buys_left = int(state.get("buys_left", 1))  # type: ignore[arg-type]
 
+    log_turn_state(game_id, state)
+
     # If no buys remain or no meaningful buys affordable, end turn
     affordable_any = (
         (_game.stock.quantities.get("province", 0) > 0 and coins_left >= BUY_PROVINCE_COINS)
@@ -407,6 +413,14 @@ def play(_game: Game, game_id: GameIdDependency, request: Request) -> DopynionRe
 
     # Delegated decision logic using remaining coins
     decision = choose_buy_action(_game, coins_left, me_idx, state)
+    log_context(
+        game_id,
+        phase="buy",
+        me_idx=me_idx,
+        coins_left=coins_left,
+        buys_left=buys_left,
+        chosen=decision,
+    )
 
     # Mark and update state after a buy
     if decision.startswith("BUY"):
