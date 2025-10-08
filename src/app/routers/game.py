@@ -78,8 +78,14 @@ BUY_SILVER_COINS = 3
 # --- phase thresholds & caps (avoid magic numbers) ---
 ENDGAME_PROVINCE_THRESHOLD = 2
 MIDGAME_PROVINCE_THRESHOLD = 4
+
 MAX_LABS = 3
 MAX_SMITHIES = 2
+
+# --- additional strategic thresholds ---
+BEHIND_DUCHY_DEFICIT = 6  # if trailing by >= this, consider Duchy earlier
+EARLY_PROVINCE_STOCK = 6  # start pressuring Provinces once <= this remain
+GARDENS_EARLY_STOCK = 8  # consider Gardens plan if Provinces are plentiful
 
 # --- costs and per-action bonuses (per client rules) ---
 COSTS: dict[str, int] = {
@@ -106,11 +112,29 @@ ACTION_COIN_BONUS: dict[str, int] = {
 }
 
 # Extra buys granted by *playing* these actions during the turn
+
 ACTION_BUY_BONUS: dict[str, int] = {
     "market": 1,
     "woodcutter": 1,
     "festival": 1,
 }
+
+# --- helpers ---
+
+
+def _in_stock(_game: Game, card: str) -> bool:
+    return (_game.stock.quantities or {}).get(card, 0) > 0
+
+
+def _early_province_ok(counts: dict[str, int], provinces_left: int) -> bool:
+    """Return True if we should start buying Provinces even before the very endgame.
+    Heuristics: we have at least some economy (>=1 gold or >=2 labs), or provinces low.
+    """
+    return (
+        counts.get("gold", 0) >= 1
+        or counts.get("laboratory", 0) >= 2
+        or provinces_left <= EARLY_PROVINCE_STOCK
+    )
 
 
 def _compute_turn_resources(game: Game, me_idx: int) -> tuple[int, int]:
@@ -135,7 +159,7 @@ def _compute_turn_resources(game: Game, me_idx: int) -> tuple[int, int]:
 
 
 FIVE_COST_PREFER = ["laboratory", "market", "festival"]
-FOUR_COST_PREFER = ["smithy", "village"]
+FOUR_COST_PREFER = ["village", "smithy"]  # default preference; smithy gated by terminal capacity
 # crude priority table (higher is better)
 CARD_PRIORITY = defaultdict(
     lambda: 0,
@@ -143,11 +167,14 @@ CARD_PRIORITY = defaultdict(
         "province": 100,
         "gold": 80,
         "laboratory": 70,
-        "market": 60,
+        "market": 62,
+        "festival": 58,
         "smithy": 55,
-        "festival": 50,
         "village": 40,
+        "duchy": 35,
+        "gardens": 32,
         "silver": 30,
+        "estate": 10,
         "copper": 5,
     },
 )
@@ -252,6 +279,30 @@ def _find_me(game: Game) -> int:
     return 1 if len(game.players) > 1 else 0
 
 
+# --- strategic helpers for Gardens/alt-VP ---
+def _score_gap(game: Game, me_idx: int) -> int:
+    my, opp = _score_status(game, me_idx)
+    return my - opp
+
+
+def _should_pivot_to_gardens(game: Game, me_idx: int) -> bool:
+    """Decide once per game if we should pursue a Gardens strategy.
+    Conditions (approx):
+      - Gardens pile exists
+      - Provinces are plentiful (early/mid) to give time to grow deck
+      - We are trailing by a noticeable amount (encourage alt-VP), or there are many +buy/+gain actions available.
+    """
+    if not _in_stock(game, "gardens"):
+        return False
+    provinces_left = game.stock.quantities.get("province", 0)
+    if provinces_left < GARDENS_EARLY_STOCK:
+        return False
+    # If behind by 6+ VP, or if both Market and Festival exist (extra buys), consider Gardens.
+    gap = _score_gap(game, me_idx)
+    many_buys_avail = _in_stock(game, "market") or _in_stock(game, "festival")
+    return gap <= -BEHIND_DUCHY_DEFICIT or many_buys_avail
+
+
 def _endgame_buy(
     _game: Game, coins: int, provinces_left: int, my_score: int, best_opp: int
 ) -> str | None:
@@ -259,13 +310,9 @@ def _endgame_buy(
     if provinces_left <= ENDGAME_PROVINCE_THRESHOLD:
         if coins >= BUY_PROVINCE_COINS and _game.stock.quantities.get("province", 0) > 0:
             return "BUY province"
-        if coins >= BUY_5_COST_COINS and _game.stock.quantities.get("duchy", 0) > 0:
+        if coins >= BUY_5_COST_COINS and _in_stock(_game, "duchy"):
             return "BUY duchy"
-        if (
-            coins >= BUY_SILVER_COINS
-            and my_score >= best_opp
-            and _game.stock.quantities.get("estate", 0) > 0
-        ):
+        if coins >= BUY_SILVER_COINS and _in_stock(_game, "estate"):
             return "BUY estate"
     return None
 
@@ -275,14 +322,17 @@ def _midgame_buy(
 ) -> str | None:
     """Greening pressure before the final two provinces."""
     if provinces_left <= MIDGAME_PROVINCE_THRESHOLD:
-        if coins >= BUY_PROVINCE_COINS and _game.stock.quantities.get("province", 0) > 0:
+        if coins >= BUY_PROVINCE_COINS and _in_stock(_game, "province"):
             return "BUY province"
-        if (
-            coins >= BUY_5_COST_COINS
-            and _game.stock.quantities.get("duchy", 0) > 0
-            and my_score <= best_opp
-        ):
+        if coins >= BUY_5_COST_COINS and _in_stock(_game, "duchy") and my_score <= best_opp:
             return "BUY duchy"
+    # Also, if significantly behind anytime and can afford Duchy, take it to catch up a bit
+    if (
+        (best_opp - my_score) >= BEHIND_DUCHY_DEFICIT
+        and coins >= BUY_5_COST_COINS
+        and _in_stock(_game, "duchy")
+    ):
+        return "BUY duchy"
     return None
 
 
@@ -293,60 +343,70 @@ def _economy_buy(_game: Game, coins: int) -> str | None:
     return None
 
 
-def _five_cost_buy(_game: Game, coins: int, counts: dict[str, int]) -> str | None:
+def _five_cost_buy(
+    _game: Game, coins: int, counts: dict[str, int], gardens_plan: bool = False
+) -> str | None:
     decision: str | None = None
+    if coins < BUY_5_COST_COINS:
+        return None
 
-    # Only consider if we have enough coins
-    if coins >= BUY_5_COST_COINS:
-        # Prefer a few labs first
-        if (
-            _game.stock.quantities.get("laboratory", 0) > 0
-            and counts.get("laboratory", 0) < MAX_LABS
-        ):
-            decision = "BUY laboratory"
-        else:
-            # If terminals are colliding, prefer action sources
-            if _terminal_capacity(counts) <= 0:
-                if _game.stock.quantities.get("market", 0) > 0:
-                    decision = "BUY market"
-                elif _game.stock.quantities.get("village", 0) > 0 and coins >= BUY_4_COST_COINS:
-                    decision = "BUY village"
+    # Prefer a few labs first
+    if _in_stock(_game, "laboratory") and counts.get("laboratory", 0) < MAX_LABS:
+        return "BUY laboratory"
 
-            # Otherwise take best available from preferred set
-            if decision is None:
-                for c in FIVE_COST_PREFER:
-                    if _game.stock.quantities.get(c, 0) > 0:
-                        decision = f"BUY {c}"
-                        break
+    # If terminals are colliding, prefer action sources (Market/Festival or Village if affordable)
+    if _terminal_capacity(counts) <= 0:
+        if _in_stock(_game, "market"):
+            return "BUY market"
+        if _in_stock(_game, "festival"):
+            return "BUY festival"
+        if _in_stock(_game, "village") and coins >= BUY_4_COST_COINS:
+            return "BUY village"
 
-            # Fallback
-            if decision is None and _game.stock.quantities.get("silver", 0) > 0:
-                decision = "BUY silver"
+    # Gardens plan: value extra buys highly to pick up multiple cheap cards later
+    if gardens_plan:
+        for c in ("market", "festival", "laboratory"):
+            if _in_stock(_game, c):
+                return f"BUY {c}"
 
+    # Otherwise take best available from preferred set
+    for c in FIVE_COST_PREFER:
+        if _in_stock(_game, c):
+            decision = f"BUY {c}"
+            break
+
+    # Fallback: silver to improve economy
+    if decision is None and _in_stock(_game, "silver"):
+        decision = "BUY silver"
     return decision
 
 
 def _four_cost_buy(_game: Game, coins: int, counts: dict[str, int]) -> str | None:
     if coins < BUY_4_COST_COINS:
         return None
-    if _terminal_capacity(counts) <= 0 and _game.stock.quantities.get("village", 0) > 0:
+    if _terminal_capacity(counts) <= 0 and _in_stock(_game, "village"):
         return "BUY village"
     if (
-        _game.stock.quantities.get("smithy", 0) > 0
+        _in_stock(_game, "smithy")
         and counts.get("smithy", 0) < MAX_SMITHIES
         and _terminal_capacity(counts) > 0
     ):
         return "BUY smithy"
-    if _game.stock.quantities.get("village", 0) > 0:
+    if _in_stock(_game, "village"):
         return "BUY village"
-    if _game.stock.quantities.get("silver", 0) > 0:
+    if _in_stock(_game, "gardens"):
+        return "BUY gardens"
+    if _in_stock(_game, "silver"):
         return "BUY silver"
     return None
 
 
 def _three_cost_buy(_game: Game, coins: int) -> str | None:
-    if coins >= BUY_SILVER_COINS and _game.stock.quantities.get("silver", 0) > 0:
+    if coins >= BUY_SILVER_COINS and _in_stock(_game, "silver"):
         return "BUY silver"
+    if coins >= 3 and _in_stock(_game, "village") and _terminal_capacity(state_counts := {}) <= 0:
+        # conservative: only if we somehow know we collide; otherwise silver
+        return "BUY village"
     return None
 
 
@@ -354,28 +414,53 @@ def choose_buy_action(_game: Game, coins: int, me_idx: int, state: dict[str, obj
     counts: defaultdict[str, int] = state["counts"]  # type: ignore[assignment]
     provinces_left = _game.stock.quantities.get("province", 0)
     my_score, best_opp = _score_status(_game, me_idx)
+    gardens_plan = bool(state.get("gardens_plan", False))
 
-    # Order of checks from most forcing to least
-    decision = None  # type: Optional[str]
+    # 0) If we can/should take a Province earlier due to economy or low stock
+    if (
+        coins >= BUY_PROVINCE_COINS
+        and _in_stock(_game, "province")
+        and _early_province_ok(counts, provinces_left)
+    ):
+        return "BUY province"
 
-    # Province, greening pressure
-    if coins >= BUY_PROVINCE_COINS and _game.stock.quantities.get("province", 0) > 0:
-        decision = "BUY province"
+    # 1) Endgame forcing
+    decision = _endgame_buy(_game, coins, provinces_left, my_score, best_opp)
+    if decision is not None:
+        return decision
 
-    if decision is None:
-        decision = _endgame_buy(_game, coins, provinces_left, my_score, best_opp)
-    if decision is None:
-        decision = _midgame_buy(_game, coins, provinces_left, my_score, best_opp)
-    if decision is None:
-        decision = _economy_buy(_game, coins)
-    if decision is None:
-        decision = _five_cost_buy(_game, coins, counts)
-    if decision is None:
-        decision = _four_cost_buy(_game, coins, counts)
-    if decision is None:
-        decision = _three_cost_buy(_game, coins)
+    # 2) Midgame greening pressure (and behind duchy rule)
+    decision = _midgame_buy(_game, coins, provinces_left, my_score, best_opp)
+    if decision is not None:
+        return decision
 
-    return decision or "END_TURN"
+    # 3) Gardens plan: pick Gardens aggressively at 4+, and prioritize +buys at 5
+    if gardens_plan:
+        if coins >= 4 and _in_stock(_game, "gardens"):
+            return "BUY gardens"
+        decision = _five_cost_buy(_game, coins, counts, gardens_plan=True)
+        if decision is not None:
+            return decision
+
+    # 4) Economy (Gold at 6)
+    decision = _economy_buy(_game, coins)
+    if decision is not None:
+        return decision
+
+    # 5) Action improvements
+    decision = _five_cost_buy(_game, coins, counts, gardens_plan=False)
+    if decision is not None:
+        return decision
+
+    decision = _four_cost_buy(_game, coins, counts)
+    if decision is not None:
+        return decision
+
+    decision = _three_cost_buy(_game, coins)
+    if decision is not None:
+        return decision
+
+    return "END_TURN"
 
 
 @router.post("/play")
@@ -386,6 +471,10 @@ def play(_game: Game, game_id: GameIdDependency, request: Request) -> DopynionRe
     state = _get_state(game_id)
 
     me_idx = _find_me(_game)
+
+    # Initialize/remember strategic long-term plan flags
+    if "gardens_plan" not in state:
+        state["gardens_plan"] = _should_pivot_to_gardens(_game, me_idx)
 
     # Initialize per-turn resources on first /play call of the turn
     if not state.get("bought") and not state.get("initialized_resources"):
@@ -420,6 +509,7 @@ def play(_game: Game, game_id: GameIdDependency, request: Request) -> DopynionRe
         coins_left=coins_left,
         buys_left=buys_left,
         chosen=decision,
+        gardens_plan=state.get("gardens_plan", False),
     )
 
     # Mark and update state after a buy
