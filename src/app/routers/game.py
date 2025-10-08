@@ -25,7 +25,15 @@ from app.inspectors import (
 )
 
 router = APIRouter()
+# ----- buying thresholds (avoid magic numbers) -----
+BUY_PROVINCE_COINS = 8
+BUY_GOLD_COINS = 6
+BUY_5_COST_COINS = 5
+BUY_4_COST_COINS = 4
+BUY_SILVER_COINS = 3
 
+FIVE_COST_PREFER = ["laboratory", "market", "festival"]
+FOUR_COST_PREFER = ["smithy", "village"]
 # crude priority table (higher is better)
 CARD_PRIORITY = defaultdict(
     lambda: 0,
@@ -118,8 +126,37 @@ def start_turn(game_id: GameIdDependency, request: Request) -> DopynionResponseS
 def play(_game: Game, game_id: GameIdDependency, request: Request) -> DopynionResponseStr:
     log_meta(request, game_id)
     log_game(_game)
-    log_decision(game_id, "END_TURN")
-    return DopynionResponseStr(game_id=game_id, decision="END_TURN")
+
+    me = _game.players[1]  # we seem to be index 1 in your logs
+    q = (me.hand.quantities if me.hand else {}) or {}
+    coins = q.get("copper", 0) * 1 + q.get("silver", 0) * 2 + q.get("gold", 0) * 3
+
+    # Simple buy rules
+    decision = "END_TURN"
+    if coins >= BUY_PROVINCE_COINS and _game.stock.quantities.get("province", 0) > 0:
+        decision = "BUY province"
+    elif coins >= BUY_GOLD_COINS and _game.stock.quantities.get("gold", 0) > 0:
+        decision = "BUY gold"
+    elif coins >= BUY_5_COST_COINS:
+        for c in FIVE_COST_PREFER:
+            if _game.stock.quantities.get(c, 0) > 0:
+                decision = f"BUY {c}"
+                break
+        else:
+            decision = "BUY silver"
+    elif coins >= BUY_4_COST_COINS:
+        for c in FOUR_COST_PREFER:
+            if _game.stock.quantities.get(c, 0) > 0:
+                decision = f"BUY {c}"
+                break
+        else:
+            decision = "BUY silver"
+    elif coins >= BUY_SILVER_COINS and _game.stock.quantities.get("silver", 0) > 0:
+        decision = "BUY silver"
+    # else: keep END_TURN on 0-2 coins   # <- normal hyphen
+
+    log_decision(game_id, decision)
+    return DopynionResponseStr(game_id=game_id, decision=decision)
 
 
 @router.get("/end_game")
