@@ -101,14 +101,16 @@ COSTS: dict[str, int] = {
     "village": 3,
     "woodcutter": 3,
     "festival": 5,
+    "gardens": 4,  # Gardens costs 4 coins
 }
 
-# Bonus coins granted by *playing* these actions during the turn
+# Bonus coins granted by *playing* these actions during the turn.
+# Only actions that actually provide coins when played are listed.
+# Laboratory gives 0 coins (it gives +2 cards, +1 action, but no coins).
 ACTION_COIN_BONUS: dict[str, int] = {
-    "laboratory": 2,  # client says Labo: +2 coins, +1 card
     "market": 1,  # Market: +1 coin, +1 buy, +1 card
     "festival": 2,  # Festival: +2 coins, +1 buy
-    # smithy/village/woodcutter give 0 coins per the client's description
+    "woodcutter": 2,  # Woodcutter: +2 coins, +1 buy
 }
 
 # Extra buys granted by *playing* these actions during the turn
@@ -404,9 +406,6 @@ def _four_cost_buy(_game: Game, coins: int, counts: dict[str, int]) -> str | Non
 def _three_cost_buy(_game: Game, coins: int) -> str | None:
     if coins >= BUY_SILVER_COINS and _in_stock(_game, "silver"):
         return "BUY silver"
-    if coins >= 3 and _in_stock(_game, "village") and _terminal_capacity(state_counts := {}) <= 0:
-        # conservative: only if we somehow know we collide; otherwise silver
-        return "BUY village"
     return None
 
 
