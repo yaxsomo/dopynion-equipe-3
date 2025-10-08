@@ -99,18 +99,24 @@ COSTS: dict[str, int] = {
     "market": 5,
     "smithy": 4,
     "village": 3,
+    "gardens": 4,
     "woodcutter": 3,
     "festival": 5,
-    "gardens": 4,  # Gardens costs 4 coins
 }
 
-# Bonus coins granted by *playing* these actions during the turn.
-# Only actions that actually provide coins when played are listed.
-# Laboratory gives 0 coins (it gives +2 cards, +1 action, but no coins).
+# Bonus coins granted by *playing* these actions during the turn
 ACTION_COIN_BONUS: dict[str, int] = {
-    "market": 1,  # Market: +1 coin, +1 buy, +1 card
-    "festival": 2,  # Festival: +2 coins, +1 buy
-    "woodcutter": 2,  # Woodcutter: +2 coins, +1 buy
+    "market": 1,
+    "festival": 2,
+    "woodcutter": 2,
+}
+
+# Extra actions granted by playing an action
+ACTION_PLUS_ACTIONS: dict[str, int] = {
+    "village": 2,
+    "market": 1,
+    "laboratory": 1,
+    "festival": 2,
 }
 
 # Extra buys granted by *playing* these actions during the turn
@@ -139,25 +145,45 @@ def _early_province_ok(counts: dict[str, int], provinces_left: int) -> bool:
     )
 
 
-def _compute_turn_resources(game: Game, me_idx: int) -> tuple[int, int]:
-    """Estimate (coins_total, buys_total) for the current turn from treasures + action bonuses.
+def _compute_treasure_coins(game: Game, me_idx: int) -> int:
+    """Return coins from treasure cards currently in hand (no action bonuses)."""
+    me = game.players[me_idx]
+    q = (me.hand.quantities if me.hand else {}) or {}
+    return q.get("copper", 0) * 1 + q.get("silver", 0) * 2 + q.get("gold", 0) * 3
 
-    We assume actions that give +coins/+buys can be played before buying.
+
+# New helper: action selection logic
+def choose_action(game: Game, me_idx: int, state: dict[str, object]) -> str | None:
+    """Decide which ACTION to play this call, if any.
+    We maintain an optimistic local 'actions_left' counter and update per-action bonuses.
     """
     me = game.players[me_idx]
     q = (me.hand.quantities if me.hand else {}) or {}
 
-    coins = q.get("copper", 0) * 1 + q.get("silver", 0) * 2 + q.get("gold", 0) * 3
+    actions_left = int(state.get("actions_left", 1))
+    if actions_left <= 0:
+        return None
 
-    # add action coin bonuses (per quantity of those action cards in hand)
-    for card, bonus in ACTION_COIN_BONUS.items():
-        coins += q.get(card, 0) * bonus
+    # If no action cards in hand, nothing to do
+    if not any(k in q for k in ENGINE_ACTIONS.union(TERMINAL_ACTIONS)):
+        return None
 
-    buys = 1  # base buy
-    for card, bonus in ACTION_BUY_BONUS.items():
-        buys += q.get(card, 0) * bonus
+    # Priority: engine (+actions) before terminals
+    for c in ("village", "market", "laboratory", "festival"):
+        if q.get(c, 0) > 0:
+            state["actions_left"] = actions_left - 1 + ACTION_PLUS_ACTIONS.get(c, 0)
+            state["action_coins"] = int(state.get("action_coins", 0)) + ACTION_COIN_BONUS.get(c, 0)
+            state["extra_buys"] = int(state.get("extra_buys", 0)) + ACTION_BUY_BONUS.get(c, 0)
+            return f"ACTION {c}"
 
-    return coins, buys
+    for c in ("smithy", "woodcutter"):
+        if q.get(c, 0) > 0:
+            state["actions_left"] = actions_left - 1
+            state["action_coins"] = int(state.get("action_coins", 0)) + ACTION_COIN_BONUS.get(c, 0)
+            state["extra_buys"] = int(state.get("extra_buys", 0)) + ACTION_BUY_BONUS.get(c, 0)
+            return f"ACTION {c}"
+
+    return None
 
 
 FIVE_COST_PREFER = ["laboratory", "market", "festival"]
@@ -254,6 +280,10 @@ def start_turn(game_id: GameIdDependency, request: Request) -> DopynionResponseS
     state["buys_left"] = 1
     state["coins_left"] = 0
     state["initialized_resources"] = False
+    state["phase"] = "ACTION"
+    state["actions_left"] = 1
+    state["action_coins"] = 0
+    state["extra_buys"] = 0
     log_decision(game_id, "OK")
     log_turn_state(game_id, state)
     return DopynionResponseStr(game_id=game_id, decision="OK")
@@ -406,6 +436,9 @@ def _four_cost_buy(_game: Game, coins: int, counts: dict[str, int]) -> str | Non
 def _three_cost_buy(_game: Game, coins: int) -> str | None:
     if coins >= BUY_SILVER_COINS and _in_stock(_game, "silver"):
         return "BUY silver"
+    if coins >= 3 and _in_stock(_game, "village") and _terminal_capacity(state_counts := {}) <= 0:
+        # conservative: only if we somehow know we collide; otherwise silver
+        return "BUY village"
     return None
 
 
@@ -468,25 +501,42 @@ def play(_game: Game, game_id: GameIdDependency, request: Request) -> DopynionRe
     log_game_compact(_game)
 
     state = _get_state(game_id)
-
     me_idx = _find_me(_game)
+
+    # Ensure defaults for new per-turn state keys
+    state.setdefault("phase", "ACTION")
+    state.setdefault("actions_left", 1)
+    state.setdefault("action_coins", 0)
+    state.setdefault("extra_buys", 0)
+    state.setdefault("buys_left", 1)
 
     # Initialize/remember strategic long-term plan flags
     if "gardens_plan" not in state:
         state["gardens_plan"] = _should_pivot_to_gardens(_game, me_idx)
 
-    # Initialize per-turn resources on first /play call of the turn
-    if not state.get("bought") and not state.get("initialized_resources"):
-        coins_total, buys_total = _compute_turn_resources(_game, me_idx)
-        state["coins_left"] = coins_total
-        state["buys_left"] = buys_total
-        state["initialized_resources"] = True  # mark so we don't recompute mid-turn
-
-    # Fallback if keys are missing (robustness)
-    coins_left = int(state.get("coins_left", 0))  # type: ignore[arg-type]
-    buys_left = int(state.get("buys_left", 1))  # type: ignore[arg-type]
-
     log_turn_state(game_id, state)
+
+    # --- ACTION phase handling ---
+    if state.get("phase") == "ACTION":
+        action_decision = choose_action(_game, me_idx, state)
+        if action_decision is not None:
+            log_context(
+                game_id,
+                phase="action",
+                me_idx=me_idx,
+                actions_left=state.get("actions_left"),
+                chosen=action_decision,
+            )
+            log_decision(game_id, action_decision)
+            return DopynionResponseStr(game_id=game_id, decision=action_decision)
+        # no action to play -> transition to BUY
+        state["phase"] = "BUY"
+
+    # --- BUY phase handling ---
+    treasure_coins = _compute_treasure_coins(_game, me_idx)
+    coins_left = treasure_coins + int(state.get("action_coins", 0))
+    buys_left = int(state.get("buys_left", 1)) + int(state.get("extra_buys", 0))
+    state["coins_left"] = coins_left
 
     # If no buys remain or no meaningful buys affordable, end turn
     affordable_any = (
@@ -519,14 +569,15 @@ def play(_game: Game, game_id: GameIdDependency, request: Request) -> DopynionRe
             card = card.strip().lower()
             cost = COSTS.get(card, 0)
             state["coins_left"] = max(0, coins_left - cost)
-            state["buys_left"] = max(0, buys_left - 1)
+            # Only decrement base buys; leave extra_buys untouched
+            state["buys_left"] = max(0, int(state.get("buys_left", 1)) - 1)
 
             counts: defaultdict[str, int] = state["counts"]  # type: ignore[assignment]
             counts[card] += 1
         except Exception:
             # keep state consistent even on parsing issues
             state["coins_left"] = coins_left
-            state["buys_left"] = max(0, buys_left - 1)
+            state["buys_left"] = max(0, int(state.get("buys_left", 1)) - 1)
 
     log_decision(game_id, decision)
     return DopynionResponseStr(game_id=game_id, decision=decision)
