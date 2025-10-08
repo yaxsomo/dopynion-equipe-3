@@ -79,6 +79,14 @@ BUY_SILVER_COINS = 3
 ENDGAME_PROVINCE_THRESHOLD = 2
 MIDGAME_PROVINCE_THRESHOLD = 4
 
+# --- turn-limit related knobs ---
+MAX_TURN = 155  # hard stop by server
+RUSH_TURN = 145  # start prioritizing VP to avoid leaving points on table
+MIN_GREEN_TURN = 14  # avoid Provinces before this unless conditions force it
+# Pace Provinces so we don't end the game too quickly while engine is small
+PROVINCE_SOFT_CAP_BEFORE_TURN = 20
+PROVINCES_ALLOWED_BEFORE_CAP = 2
+
 MAX_LABS = 3
 MAX_SMITHIES = 2
 
@@ -175,23 +183,35 @@ def _early_province_ok(
     turn: int,
     score_gap: int,
 ) -> bool:
-    """Return True if we should start buying Provinces *before* the late endgame.
+    # Hard push near the turn cap: don't risk leaving VP on the table
+    if turn >= RUSH_TURN:
+        return True
 
-    We pace Province buys to avoid ending the game too early when our engine isn't ready.
-    Allow early Provinces only if:
-      - Provinces are already low, OR
-      - Our engine/economy is online, OR
-      - The game is sufficiently advanced, OR
-      - We are trailing significantly and need raw VP now.
-    """
+    # If Provinces are already low, it's okay to take them
     if provinces_left <= EARLY_PROVINCE_STOCK:
         return True
+
+    # If our deck is strong, greening early is fine
     if _engine_ready(counts):
         return True
-    if turn >= 12:
-        return True
+
+    # General build window: before MIN_GREEN_TURN, avoid Provinces unless we're far behind
+    if turn < MIN_GREEN_TURN and score_gap > -BEHIND_DUCHY_DEFICIT:
+        return False
+
+    # Province pacing: before a certain turn, limit how many Provinces we personally take
+    my_provinces = counts.get("province", 0)
+    if turn < PROVINCE_SOFT_CAP_BEFORE_TURN and my_provinces >= PROVINCES_ALLOWED_BEFORE_CAP:
+        return False
+
+    # If we're significantly behind, allow early Provinces as catch-up VP
     if score_gap <= -BEHIND_DUCHY_DEFICIT:
         return True
+
+    # After the minimum green turn, it's acceptable
+    if turn >= MIN_GREEN_TURN:
+        return True
+
     return False
 
 
@@ -447,9 +467,19 @@ def _should_pivot_to_gardens(game: Game, me_idx: int) -> bool:
 
 
 def _endgame_buy(
-    _game: Game, coins: int, provinces_left: int, my_score: int, best_opp: int
+    _game: Game, coins: int, provinces_left: int, my_score: int, best_opp: int, turn: int
 ) -> str | None:
-    """Heuristics when piles are low."""
+    """Heuristics when piles are low or we're close to the turn limit."""
+    # Near the turn cap, prioritize VP regardless of pile counts
+    if turn >= RUSH_TURN:
+        if coins >= BUY_PROVINCE_COINS and _game.stock.quantities.get("province", 0) > 0:
+            return "BUY province"
+        if coins >= BUY_5_COST_COINS and _in_stock(_game, "duchy"):
+            return "BUY duchy"
+        if coins >= BUY_SILVER_COINS and _in_stock(_game, "estate"):
+            return "BUY estate"
+        return None
+
     if provinces_left <= ENDGAME_PROVINCE_THRESHOLD:
         if coins >= BUY_PROVINCE_COINS and _game.stock.quantities.get("province", 0) > 0:
             return "BUY province"
@@ -461,9 +491,12 @@ def _endgame_buy(
 
 
 def _midgame_buy(
-    _game: Game, coins: int, provinces_left: int, my_score: int, best_opp: int
+    _game: Game, coins: int, provinces_left: int, my_score: int, best_opp: int, turn: int
 ) -> str | None:
-    """Greening pressure before the final two provinces."""
+    """Greening pressure before the final two provinces; turn pressure aware."""
+    # If we're approaching the cap, start taking Provinces on $8 even in midgame
+    if turn >= RUSH_TURN and coins >= BUY_PROVINCE_COINS and _in_stock(_game, "province"):
+        return "BUY province"
     if provinces_left <= MIDGAME_PROVINCE_THRESHOLD:
         if coins >= BUY_PROVINCE_COINS and _in_stock(_game, "province"):
             return "BUY province"
@@ -598,8 +631,10 @@ def choose_buy_action(_game: Game, coins: int, me_idx: int, state: dict[str, obj
     my_score, best_opp = _score_status(_game, me_idx)
     gardens_plan = bool(state.get("gardens_plan", False))
 
+    turn = int(state.get("turn", 1))
+
     # Opening buys (first 3 turns)
-    decision = _opening_buys(_game, coins, counts, int(state.get("turn", 1)))
+    decision = _opening_buys(_game, coins, counts, turn)
     if decision is not None:
         return decision
 
@@ -609,19 +644,28 @@ def choose_buy_action(_game: Game, coins: int, me_idx: int, state: dict[str, obj
         and _early_province_ok(
             counts,
             provinces_left,
-            int(state.get("turn", 1)),
+            turn,
             my_score - best_opp,
         )
     ):
         return "BUY province"
 
+    # If we can afford Province but pacing says to keep building, prefer Gold or strong $5s
+    if (
+        coins >= BUY_PROVINCE_COINS
+        and _in_stock(_game, "gold")
+        and not _early_province_ok(counts, provinces_left, turn, my_score - best_opp)
+    ):
+        # Take Gold to accelerate towards consistent $8 hands without draining Provinces
+        return "BUY gold"
+
     # 1) Endgame forcing
-    decision = _endgame_buy(_game, coins, provinces_left, my_score, best_opp)
+    decision = _endgame_buy(_game, coins, provinces_left, my_score, best_opp, turn)
     if decision is not None:
         return decision
 
     # 2) Midgame greening pressure (and behind duchy rule)
-    decision = _midgame_buy(_game, coins, provinces_left, my_score, best_opp)
+    decision = _midgame_buy(_game, coins, provinces_left, my_score, best_opp, turn)
     if decision is not None:
         return decision
 
