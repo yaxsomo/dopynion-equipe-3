@@ -25,7 +25,42 @@ from app.inspectors import (
 )
 
 # Track whether we've already bought during the current turn for each game
-TURN_STATE: dict[str, dict[str, bool]] = defaultdict(lambda: {"bought": False})
+TURN_STATE: dict[str, dict[str, object]] = defaultdict(
+    lambda: {"bought": False, "counts": defaultdict(int)}
+)
+ENGINE_ACTIONS = {"village", "market", "laboratory", "festival"}
+TERMINAL_ACTIONS = {"smithy", "woodcutter"}  # simple terminals present in this set
+
+
+def _get_state(game_id: str) -> dict[str, object]:
+    """Return mutable per-game state dict with keys: 'bought' (bool), 'counts' (defaultdict)."""
+    state = TURN_STATE[game_id]
+    # ensure 'counts' exists and is a defaultdict(int)
+    if "counts" not in state or not isinstance(state["counts"], defaultdict):
+        state["counts"] = defaultdict(int)
+    return state
+
+
+def _score_status(game: Game, me_idx: int) -> tuple[int, int]:
+    """Return (my_score, best_opponent_score)."""
+    my_score = getattr(game.players[me_idx], "score", 0) or 0
+    opp_scores = [getattr(p, "score", 0) or 0 for i, p in enumerate(game.players) if i != me_idx]
+    return my_score, (max(opp_scores) if opp_scores else 0)
+
+
+def _terminal_capacity(state_counts: dict[str, int]) -> int:
+    """Approximate how many more terminal actions we can support without collision."""
+    terminals = sum(state_counts.get(t, 0) for t in TERMINAL_ACTIONS)
+    # sources of +Actions (very rough model)
+    plus_actions = (
+        state_counts.get("village", 0) * 2
+        + state_counts.get("market", 0) * 1
+        + state_counts.get("festival", 0) * 2
+        + state_counts.get("laboratory", 0) * 1  # lab is non-terminal (+1 action)
+    )
+    # one native action per turn
+    return 1 + plus_actions - terminals
+
 
 # Our team name as exposed by /name; used to locate our player seat dynamically
 TEAM_NAME = "Equipe3MaGueule"
@@ -37,6 +72,12 @@ BUY_GOLD_COINS = 6
 BUY_5_COST_COINS = 5
 BUY_4_COST_COINS = 4
 BUY_SILVER_COINS = 3
+
+# --- phase thresholds & caps (avoid magic numbers) ---
+ENDGAME_PROVINCE_THRESHOLD = 2
+MIDGAME_PROVINCE_THRESHOLD = 4
+MAX_LABS = 3
+MAX_SMITHIES = 2
 
 FIVE_COST_PREFER = ["laboratory", "market", "festival"]
 FOUR_COST_PREFER = ["smithy", "village"]
@@ -123,7 +164,8 @@ def start_game(game_id: GameIdDependency, request: Request) -> DopynionResponseS
 @router.get("/start_turn")
 def start_turn(game_id: GameIdDependency, request: Request) -> DopynionResponseStr:
     log_meta(request, game_id)
-    TURN_STATE[game_id]["bought"] = False  # <-- reset per turn
+    state = _get_state(game_id)
+    state["bought"] = False  # reset per turn
     log_decision(game_id, "OK")
     return DopynionResponseStr(game_id=game_id, decision="OK")
 
@@ -150,32 +192,130 @@ def _find_me(game: Game) -> int:
     return 1 if len(game.players) > 1 else 0
 
 
-def choose_buy_action(_game: Game, coins: int) -> str:
-    """Return the best BUY decision based on current coins and stock."""
-    decision = "END_TURN"
+def _endgame_buy(
+    _game: Game, coins: int, provinces_left: int, my_score: int, best_opp: int
+) -> str | None:
+    """Heuristics when piles are low."""
+    if provinces_left <= ENDGAME_PROVINCE_THRESHOLD:
+        if coins >= BUY_PROVINCE_COINS and _game.stock.quantities.get("province", 0) > 0:
+            return "BUY province"
+        if coins >= BUY_5_COST_COINS and _game.stock.quantities.get("duchy", 0) > 0:
+            return "BUY duchy"
+        if (
+            coins >= BUY_SILVER_COINS
+            and my_score >= best_opp
+            and _game.stock.quantities.get("estate", 0) > 0
+        ):
+            return "BUY estate"
+    return None
 
-    if coins >= BUY_PROVINCE_COINS and _game.stock.quantities.get("province", 0) > 0:
-        decision = "BUY province"
-    elif coins >= BUY_GOLD_COINS and _game.stock.quantities.get("gold", 0) > 0:
-        decision = "BUY gold"
-    elif coins >= BUY_5_COST_COINS:
-        for c in FIVE_COST_PREFER:
-            if _game.stock.quantities.get(c, 0) > 0:
-                decision = f"BUY {c}"
-                break
+
+def _midgame_buy(
+    _game: Game, coins: int, provinces_left: int, my_score: int, best_opp: int
+) -> str | None:
+    """Greening pressure before the final two provinces."""
+    if provinces_left <= MIDGAME_PROVINCE_THRESHOLD:
+        if coins >= BUY_PROVINCE_COINS and _game.stock.quantities.get("province", 0) > 0:
+            return "BUY province"
+        if (
+            coins >= BUY_5_COST_COINS
+            and _game.stock.quantities.get("duchy", 0) > 0
+            and my_score <= best_opp
+        ):
+            return "BUY duchy"
+    return None
+
+
+def _economy_buy(_game: Game, coins: int) -> str | None:
+    """Gold when we can afford it and provinces aren't forced."""
+    if coins >= BUY_GOLD_COINS and _game.stock.quantities.get("gold", 0) > 0:
+        return "BUY gold"
+    return None
+
+
+def _five_cost_buy(_game: Game, coins: int, counts: dict[str, int]) -> str | None:
+    decision: str | None = None
+
+    # Only consider if we have enough coins
+    if coins >= BUY_5_COST_COINS:
+        # Prefer a few labs first
+        if (
+            _game.stock.quantities.get("laboratory", 0) > 0
+            and counts.get("laboratory", 0) < MAX_LABS
+        ):
+            decision = "BUY laboratory"
         else:
-            decision = "BUY silver"
-    elif coins >= BUY_4_COST_COINS:
-        for c in FOUR_COST_PREFER:
-            if _game.stock.quantities.get(c, 0) > 0:
-                decision = f"BUY {c}"
-                break
-        else:
-            decision = "BUY silver"
-    elif coins >= BUY_SILVER_COINS and _game.stock.quantities.get("silver", 0) > 0:
-        decision = "BUY silver"
+            # If terminals are colliding, prefer action sources
+            if _terminal_capacity(counts) <= 0:
+                if _game.stock.quantities.get("market", 0) > 0:
+                    decision = "BUY market"
+                elif _game.stock.quantities.get("village", 0) > 0 and coins >= BUY_4_COST_COINS:
+                    decision = "BUY village"
+
+            # Otherwise take best available from preferred set
+            if decision is None:
+                for c in FIVE_COST_PREFER:
+                    if _game.stock.quantities.get(c, 0) > 0:
+                        decision = f"BUY {c}"
+                        break
+
+            # Fallback
+            if decision is None and _game.stock.quantities.get("silver", 0) > 0:
+                decision = "BUY silver"
 
     return decision
+
+
+def _four_cost_buy(_game: Game, coins: int, counts: dict[str, int]) -> str | None:
+    if coins < BUY_4_COST_COINS:
+        return None
+    if _terminal_capacity(counts) <= 0 and _game.stock.quantities.get("village", 0) > 0:
+        return "BUY village"
+    if (
+        _game.stock.quantities.get("smithy", 0) > 0
+        and counts.get("smithy", 0) < MAX_SMITHIES
+        and _terminal_capacity(counts) > 0
+    ):
+        return "BUY smithy"
+    if _game.stock.quantities.get("village", 0) > 0:
+        return "BUY village"
+    if _game.stock.quantities.get("silver", 0) > 0:
+        return "BUY silver"
+    return None
+
+
+def _three_cost_buy(_game: Game, coins: int) -> str | None:
+    if coins >= BUY_SILVER_COINS and _game.stock.quantities.get("silver", 0) > 0:
+        return "BUY silver"
+    return None
+
+
+def choose_buy_action(_game: Game, coins: int, me_idx: int, state: dict[str, object]) -> str:
+    counts: defaultdict[str, int] = state["counts"]  # type: ignore[assignment]
+    provinces_left = _game.stock.quantities.get("province", 0)
+    my_score, best_opp = _score_status(_game, me_idx)
+
+    # Order of checks from most forcing to least
+    decision = None  # type: Optional[str]
+
+    # Province, greening pressure
+    if coins >= BUY_PROVINCE_COINS and _game.stock.quantities.get("province", 0) > 0:
+        decision = "BUY province"
+
+    if decision is None:
+        decision = _endgame_buy(_game, coins, provinces_left, my_score, best_opp)
+    if decision is None:
+        decision = _midgame_buy(_game, coins, provinces_left, my_score, best_opp)
+    if decision is None:
+        decision = _economy_buy(_game, coins)
+    if decision is None:
+        decision = _five_cost_buy(_game, coins, counts)
+    if decision is None:
+        decision = _four_cost_buy(_game, coins, counts)
+    if decision is None:
+        decision = _three_cost_buy(_game, coins)
+
+    return decision or "END_TURN"
 
 
 @router.post("/play")
@@ -183,8 +323,10 @@ def play(_game: Game, game_id: GameIdDependency, request: Request) -> DopynionRe
     log_meta(request, game_id)
     log_game(_game)
 
+    state = _get_state(game_id)
+
     # Stop if we already bought this turn
-    if TURN_STATE[game_id]["bought"]:
+    if state["bought"]:
         decision = "END_TURN"
         log_decision(game_id, decision)
         return DopynionResponseStr(game_id=game_id, decision=decision)
@@ -195,11 +337,18 @@ def play(_game: Game, game_id: GameIdDependency, request: Request) -> DopynionRe
     coins = q.get("copper", 0) * 1 + q.get("silver", 0) * 2 + q.get("gold", 0) * 3
 
     # Delegated decision logic
-    decision = choose_buy_action(_game, coins)
+    decision = choose_buy_action(_game, coins, me_idx, state)
 
-    # Mark buy done if needed
+    # Mark buy done if needed and update state counts
     if decision.startswith("BUY"):
-        TURN_STATE[game_id]["bought"] = True
+        state["bought"] = True
+        try:
+            _, card = decision.split(" ", 1)
+            card = card.strip().lower()
+            counts: defaultdict[str, int] = state["counts"]  # type: ignore[assignment]
+            counts[card] += 1
+        except Exception:
+            pass
 
     log_decision(game_id, decision)
     return DopynionResponseStr(game_id=game_id, decision=decision)
