@@ -22,6 +22,9 @@ from app.models.responses import (
 )
 from app.strategy.actions import choose_action
 from app.strategy.constants import (
+    BUY_GOLD_COINS,
+    BUY_PROVINCE_COINS,
+    BUY_SILVER_COINS,
     COSTS,
     TEAM_NAME,
 )
@@ -123,9 +126,9 @@ def play(game: Game, game_id: GameIdDependency, request: Request) -> DopynionRes
     state["coins_left"] = coins_left
 
     affordable_any = (
-        (game.stock.quantities.get("province", 0) > 0 and coins_left >= 8)
-        or (game.stock.quantities.get("gold", 0) > 0 and coins_left >= 6)
-        or coins_left >= 3
+        (game.stock.quantities.get("province", 0) > 0 and coins_left >= BUY_PROVINCE_COINS)
+        or (game.stock.quantities.get("gold", 0) > 0 and coins_left >= BUY_GOLD_COINS)
+        or coins_left >= BUY_SILVER_COINS
     )
     if buys_left <= 0 or not affordable_any:
         decision = "END_TURN"
@@ -282,8 +285,15 @@ async def trash_money_card_for_better_money_card(
 ) -> DopynionResponseCardName:
     log_meta(request, game_id)
     log_money_cards(decision_input)
-    money = decision_input.money_in_hand
-    # lowest-priority money; copper if present
-    pick = "copper" if "copper" in money else sorted(money)[0]
+
+    money = list(getattr(decision_input, "money_in_hand", []) or [])
+
+    # If fuzzing gives us no money cards, pick a safe default
+    if not money:
+        pick: str = "copper"
+    else:
+        # Prefer to trash copper if present; otherwise trash the lowest “value” card
+        pick = "copper" if "copper" in money else sorted(money)[0]
+
     log_decision(game_id, "TRASH_MONEY_FOR_BETTER", {"chosen": pick})
     return DopynionResponseCardName(game_id=game_id, decision=pick)
