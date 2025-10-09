@@ -28,9 +28,9 @@ from app.strategy.constants import (
     COSTS,
     TEAM_NAME,
 )
-from app.strategy.pipeline import choose_buy_action
 from app.strategy.selector import should_pivot_to_gardens
 from app.strategy.state import TURN_STATE, get_state
+from app.strategy.strategies import choose_buy_action_for_strategy
 from app.strategy.utils import (
     best_from,
     compute_treasure_coins,
@@ -50,6 +50,10 @@ def name() -> str:
 @router.get("/start_game")
 def start_game(game_id: GameIdDependency, request: Request) -> DopynionResponseStr:
     log_meta(request, game_id)
+    # NEW: set per-game strategy from header (defaults to "baseline")
+    state = get_state(game_id)
+    chosen = request.headers.get("X-Strategy", "baseline").strip().lower()
+    state["strategy"] = chosen
     return DopynionResponseStr(game_id=game_id, decision="OK")
 
 
@@ -142,7 +146,9 @@ def play(game: Game, game_id: GameIdDependency, request: Request) -> DopynionRes
         log_decision(game_id, decision)
         return DopynionResponseStr(game_id=game_id, decision=decision)
 
-    decision = choose_buy_action(game, coins_left, me_idx, state)
+    # Choose buy according to the active strategy (set in /start_game via X-Strategy)
+    strategy_key = str(state.get("strategy", "baseline"))
+    decision = choose_buy_action_for_strategy(strategy_key, game, coins_left, me_idx, state)
     log_context(
         game_id,
         phase="buy",
