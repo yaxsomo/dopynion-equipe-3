@@ -492,22 +492,22 @@ def _score_gap(game: Game, me_idx: int) -> int:
 
 
 def _should_pivot_to_gardens(game: Game, me_idx: int) -> bool:
-    """Decide once per game if we should pursue a Gardens strategy.
-    Conditions (approx):
-      - Gardens pile exists
-      - Provinces are plentiful (early/mid) to give time to grow deck
-      - We are trailing by a noticeable amount (encourage alt-VP), or
-        there are many +buy/+gain actions available.
-    """
+    """Stricter pivot to Gardens: only when it's truly warranted."""
     if not _in_stock(game, "gardens"):
         return False
+
     provinces_left = game.stock.quantities.get("province", 0)
-    if provinces_left < GARDENS_EARLY_STOCK:
+    # Need lots of time left to grow a Gardens deck
+    if provinces_left < 10:
         return False
-    # If behind by 6+ VP, or if both Market and Festival exist (extra buys), consider Gardens.
+
     gap = _score_gap(game, me_idx)
-    many_buys_avail = _in_stock(game, "market") or _in_stock(game, "festival")
-    return gap <= -BEHIND_DUCHY_DEFICIT or many_buys_avail
+
+    # Require real +buy availability on the board
+    buys_exist = _in_stock(game, "market") or _in_stock(game, "festival")
+
+    # Only pivot if we're *really* behind and +buys exist
+    return gap <= -10 and buys_exist
 
 
 def _endgame_buy(
@@ -668,18 +668,21 @@ def _three_cost_buy(_game: Game, coins: int) -> str | None:
     return None
 
 
-# New 6-cost action buy helper (before defaulting to Gold)
+# New 6-cost action buy helper (only when it clearly beats Gold early)
 def _six_cost_buy(_game: Game, coins: int, counts: dict[str, int], turn: int) -> str | None:
     if coins < BUY_GOLD_COINS:
         return None
-    # Hireling is strongest early since it pays off over many turns.
-    have_hireling = counts.get("hireling", 0) > 0
-    if _in_stock(_game, "hireling") and not have_hireling and turn <= (MIN_GREEN_TURN + 4):
+
+    # 1) Early Hireling: huge if bought very early; otherwise it delays greening
+    if _in_stock(_game, "hireling") and counts.get("hireling", 0) == 0 and turn <= 10:
         return "BUY hireling"
-    # Distant Shore: non-terminal draw with +1 Action; good when engine-ready or early build.
-    if _in_stock(_game, "distantshore"):
-        if _engine_ready(counts) or turn <= MIN_GREEN_TURN:
-            return "BUY distantshore"
+
+    # 2) Distant Shore: only once our engine can actually convert the draw
+    # Avoid taking it late when we should be greening.
+    if _in_stock(_game, "distantshore") and _engine_ready(counts) and turn < (RUSH_TURN - 10):
+        return "BUY distantshore"
+
+    # Otherwise, prefer Gold (handled by the economy step).
     return None
 
 
@@ -833,8 +836,8 @@ def choose_buy_action(_game: Game, coins: int, me_idx: int, state: dict[str, obj
         lambda: _step_midgame(_game, coins, ctx, my_score, best_opp),
         lambda: _step_gardens_primary(_game, coins, gardens_plan),
         lambda: _step_gardens_secondary(_game, coins, counts, gardens_plan),
-        lambda: _six_cost_buy(_game, coins, counts, turn),
-        lambda: _step_economy(_game, coins),
+        lambda: _step_economy(_game, coins),  # ← Gold first
+        lambda: _six_cost_buy(_game, coins, counts, turn),  # ← 6-cost after Gold
         lambda: _step_five(_game, coins, counts),
         lambda: _step_four(_game, coins, counts),
         lambda: _step_three(_game, coins),
