@@ -37,7 +37,7 @@ quote-style = "double"
 
 [tool.ruff.lint]
 select = ["E","F","I","UP","B","PL","RUF"]
-ignore = ["PLR2004"]
+ignore = ["PLR0911","PLR0913"]
 
 [tool.mypy]
 python_version = "3.10"
