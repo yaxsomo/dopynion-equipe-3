@@ -75,14 +75,12 @@ def start_turn(game_id: GameIdDependency, request: Request) -> DopynionResponseS
 def play(game: Game, game_id: GameIdDependency, request: Request) -> DopynionResponseStr:
     log_meta(request, game_id)
     log_game_compact(game)
-
-    # --- Short-circuit on malformed / fuzzed payloads ---
     if not getattr(game, "players", None) or len(game.players) == 0:
         decision = "END_TURN"
         log_decision(game_id, decision)
         return DopynionResponseStr(game_id=game_id, decision=decision)
 
-    me_idx = find_me(game)  # <-- FIX: no TEAM_NAME arg
+    me_idx = find_me(game)
     if me_idx is None or me_idx < 0 or me_idx >= len(game.players):
         decision = "END_TURN"
         log_decision(game_id, decision)
@@ -125,13 +123,20 @@ def play(game: Game, game_id: GameIdDependency, request: Request) -> DopynionRes
     buys_left = int(state.get("buys_left", 1)) + int(state.get("extra_buys", 0))
     state["coins_left"] = coins_left
 
+    # Base affordability by real thresholds
     affordable_any = (
         (game.stock.quantities.get("province", 0) > 0 and coins_left >= BUY_PROVINCE_COINS)
         or (game.stock.quantities.get("gold", 0) > 0 and coins_left >= BUY_GOLD_COINS)
         or coins_left >= BUY_SILVER_COINS
-        # NEW: in Gardens plan, allow a buy even if coins < 3, so we can take Copper
-        or (state.get("gardens_plan", False) and in_stock(game, "copper"))
     )
+
+    # If not affordable yet: allow a copper *only* when on Gardens AND we have spare buys
+    # (so the copper won't replace a better buy). This matches the pipeline fallback.
+    if not affordable_any and state.get("gardens_plan", False) and in_stock(game, "copper"):
+        extra_buys = int(state.get("extra_buys", 0))
+        if extra_buys > 0 or buys_left > 1:
+            affordable_any = True
+
     if buys_left <= 0 or not affordable_any:
         decision = "END_TURN"
         log_decision(game_id, decision)

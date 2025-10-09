@@ -35,7 +35,11 @@ def step_province_if_ok(game: Game, coins: int, counts: dict[str, int], ctx: Buy
 def step_gold_if_building(
     game: Game, coins: int, counts: dict[str, int], ctx: BuyCtx
 ) -> str | None:
-    if coins >= BUY_PROVINCE_COINS and in_stock(game, "gold"):
+    # Buy Gold at 6 if we *aren't* in the early-province window.
+    # (This accelerates the deck into province range.)
+    from .constants import BUY_GOLD_COINS
+
+    if coins >= BUY_GOLD_COINS and in_stock(game, "gold"):
         if not early_province_ok(counts, ctx.provinces_left, ctx.turn, ctx.score_gap):
             return "BUY gold"
     return None
@@ -105,4 +109,15 @@ def choose_buy_action(game: Game, coins: int, me_idx: int, state: dict[str, obje
         d = s()
         if d:
             return d
+
+    # FINAL FALLBACK (guarded):
+    # If we're explicitly on a Gardens plan, and copper is in stock,
+    # buy copper only when it won't replace a better buy (spare buys),
+    # or very late to squeeze extra Gardens VP.
+    if gardens_plan and in_stock(game, "copper"):
+        extra_buys = int(state.get("extra_buys", 0))
+        buys_left = int(state.get("buys_left", 1))
+        if (extra_buys > 0 or buys_left > 1) or turn >= 18:
+            return "BUY copper"
+
     return "END_TURN"
