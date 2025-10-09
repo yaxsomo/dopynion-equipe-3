@@ -29,6 +29,7 @@ from app.strategy.constants import (
     TEAM_NAME,
 )
 from app.strategy.pipeline import choose_buy_action
+from app.strategy.selector import should_pivot_to_gardens
 from app.strategy.state import TURN_STATE, get_state
 from app.strategy.utils import (
     best_from,
@@ -98,8 +99,6 @@ def play(game: Game, game_id: GameIdDependency, request: Request) -> DopynionRes
 
     # Initialize long-term plan flags once
     if "gardens_plan" not in state:
-        from app.strategy.selector import should_pivot_to_gardens
-
         state["gardens_plan"] = should_pivot_to_gardens(game, me_idx)
 
     log_turn_state(game_id, state)

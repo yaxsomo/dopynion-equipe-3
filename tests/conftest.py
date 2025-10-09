@@ -47,9 +47,10 @@ class GameStub:
 def make_game():
     def _make(
         stock: dict[str, int] | None = None,
-        scores: list[int] = [0, 0],
+        scores: list[int] | None = None,
     ) -> GameStub:
         stock = stock or {}
+        scores = scores or [0, 0]
         players = [PlayerStub(name=f"P{i}", score=s) for i, s in enumerate(scores)]
         return GameStub(stock, players)
 

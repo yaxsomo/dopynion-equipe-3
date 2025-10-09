@@ -14,6 +14,7 @@ from .buys import (
     three_cost_buy,
 )
 from .constants import (
+    BUY_4_COST_COINS,
     BUY_PROVINCE_COINS,
 )
 from .state import BuyCtx
@@ -49,7 +50,7 @@ def step_midgame(game: Game, coins: int, ctx: BuyCtx, my_score: int, best_opp: i
 
 
 def step_gardens_primary(game: Game, coins: int, gardens_plan: bool) -> str | None:
-    if gardens_plan and coins >= 4 and in_stock(game, "gardens"):
+    if gardens_plan and coins >= BUY_4_COST_COINS and in_stock(game, "gardens"):
         return "BUY gardens"
     return None
 

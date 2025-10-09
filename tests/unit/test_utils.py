@@ -21,4 +21,5 @@ def test_terminal_capacity_simple():
         "woodcutter": 0,
     }
     # base 1 action +2 from village -1 terminal = 2
-    assert terminal_capacity(counts) == 2
+    expected_capacity = 2
+    assert terminal_capacity(counts) == expected_capacity

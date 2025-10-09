@@ -12,6 +12,8 @@ from .constants import (
     COINS_EQ_3,
     COINS_EQ_4,
     COINS_EQ_5,
+    EARLY_HIRELING_TURN,
+    EARLY_PROVINCE_STOCK,
     ENDGAME_PROVINCE_THRESHOLD,
     ENGINE_GOLD_THRESHOLD,
     ENGINE_LAB_THRESHOLD,
@@ -53,7 +55,7 @@ def early_province_ok(
 ) -> bool:
     if turn >= RUSH_TURN:
         return True
-    if provinces_left <= 6:
+    if provinces_left <= EARLY_PROVINCE_STOCK:
         return True
     if engine_ready(counts):
         return True
@@ -254,8 +256,17 @@ def opening_buys(game: Game, coins: int, counts: dict[str, int], turn: int) -> s
 def six_cost_buy(game: Game, coins: int, counts: dict[str, int], turn: int) -> str | None:
     if coins < BUY_GOLD_COINS:
         return None
-    if in_stock(game, "hireling") and counts.get("hireling", 0) == 0 and turn <= 10:
+    if (
+        in_stock(game, "hireling")
+        and counts.get("hireling", 0) == 0
+        and turn <= EARLY_HIRELING_TURN
+    ):
         return "BUY hireling"
-    if in_stock(game, "distantshore") and engine_ready(counts) and turn < (RUSH_TURN - 10):
+
+    if (
+        in_stock(game, "distantshore")
+        and engine_ready(counts)
+        and turn < (RUSH_TURN - EARLY_HIRELING_TURN)
+    ):
         return "BUY distantshore"
     return None

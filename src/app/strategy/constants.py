@@ -40,6 +40,10 @@ COINS_EQ_5 = 5
 BEHIND_DUCHY_DEFICIT = 6
 EARLY_PROVINCE_STOCK = 6
 GARDENS_EARLY_STOCK = 8
+# When it's still worth buying Hireling early
+EARLY_HIRELING_TURN = 10
+# Minimum Provinces left to even consider pivoting to Gardens
+GARDENS_PIVOT_MIN_PROVINCES = 10
 
 # --- costs & per-action bonuses ---
 COSTS: dict[str, int] = {
