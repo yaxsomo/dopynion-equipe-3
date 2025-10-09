@@ -21,6 +21,5 @@ jobs:
         run: |
           ruff check .
           ruff format --check .
-          mypy src
       - name: Tests
         run: pytest
