@@ -2,15 +2,16 @@
 from __future__ import annotations
 
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 
 from .routers import game
 
 app = FastAPI(title="Equipe 3 API", version="0.1.0")
 
 
-@app.get("/", tags=["meta"])
-def root() -> dict[str, str]:
-    return {"name": "Equipe 3 API", "docs": "/docs", "health": "/health"}
+@app.get("/", tags=["meta"], response_class=HTMLResponse)
+def root() -> str:
+    return "<html><body><h1>Equipe 3 API</h1><p>Docs: /docs</p><p>Health: /health</p></body></html>"
 
 
 @app.get("/health", tags=["meta"])
