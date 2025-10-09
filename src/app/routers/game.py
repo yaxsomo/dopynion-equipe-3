@@ -153,6 +153,7 @@ COSTS: dict[str, int] = {
     "adventurer": 6,
     "magpie": 4,
     "hireling": 6,
+    "distantshore": 6,
     "marquis": 6,
 }
 
@@ -164,6 +165,7 @@ ACTION_COIN_BONUS: dict[str, int] = {
     "moneylender": 3,  # +3 coins when it trashes Copper
     "chancellor": 2,
     "poacher": 1,
+    "farmingvillage": 2,
 }
 
 # Extra actions granted by playing an action
@@ -175,6 +177,7 @@ ACTION_PLUS_ACTIONS: dict[str, int] = {
     "port": 2,
     "cellar": 1,
     "farmingvillage": 2,
+    "distantshore": 1,
     "magpie": 1,
     "poacher": 1,
 }
@@ -278,6 +281,7 @@ def _act_nonterminal(q: dict[str, int], actions_left: int, state: dict[str, obje
         "market",
         "laboratory",
         "festival",
+        "distantshore",
         "port",
         "cellar",
         "farmingvillage",
@@ -664,6 +668,21 @@ def _three_cost_buy(_game: Game, coins: int) -> str | None:
     return None
 
 
+# New 6-cost action buy helper (before defaulting to Gold)
+def _six_cost_buy(_game: Game, coins: int, counts: dict[str, int], turn: int) -> str | None:
+    if coins < BUY_GOLD_COINS:
+        return None
+    # Hireling is strongest early since it pays off over many turns.
+    have_hireling = counts.get("hireling", 0) > 0
+    if _in_stock(_game, "hireling") and not have_hireling and turn <= (MIN_GREEN_TURN + 4):
+        return "BUY hireling"
+    # Distant Shore: non-terminal draw with +1 Action; good when engine-ready or early build.
+    if _in_stock(_game, "distantshore"):
+        if _engine_ready(counts) or turn <= MIN_GREEN_TURN:
+            return "BUY distantshore"
+    return None
+
+
 def _opening_buy_5plus(_game: Game) -> str | None:
     if _game.stock.quantities.get("curse", 0) > 0 and _in_stock(_game, "witch"):
         return "BUY witch"
@@ -814,6 +833,7 @@ def choose_buy_action(_game: Game, coins: int, me_idx: int, state: dict[str, obj
         lambda: _step_midgame(_game, coins, ctx, my_score, best_opp),
         lambda: _step_gardens_primary(_game, coins, gardens_plan),
         lambda: _step_gardens_secondary(_game, coins, counts, gardens_plan),
+        lambda: _six_cost_buy(_game, coins, counts, turn),
         lambda: _step_economy(_game, coins),
         lambda: _step_five(_game, coins, counts),
         lambda: _step_four(_game, coins, counts),
