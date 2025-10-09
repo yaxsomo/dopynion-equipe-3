@@ -132,6 +132,7 @@ def five_wishlist(game: Game, counts: dict[str, int], coins: int, gardens_plan: 
     if in_stock(game, "laboratory") and counts.get("laboratory", 0) < MAX_LABS:
         picks.append("laboratory")
 
+    # If we are action-starved, prefer +Action payloads.
     if terminal_capacity(counts) <= 0:
         for c in ("market", "festival"):
             if in_stock(game, c):
@@ -148,6 +149,7 @@ def five_wishlist(game: Game, counts: dict[str, int], coins: int, gardens_plan: 
         if in_stock(game, c):
             picks.append(c)
 
+    # A safe floor pick to avoid stalling at 5 when no good action exists.
     if in_stock(game, "silver"):
         picks.append("silver")
 
@@ -164,27 +166,35 @@ def five_cost_buy(game: Game, coins: int, counts: dict[str, int], gardens_plan: 
 def four_cost_buy(game: Game, coins: int, counts: dict[str, int]) -> str | None:
     if coins < BUY_4_COST_COINS:
         return None
+
+    # Prefer strong utility at 4, respecting terminal capacity.
     for c in ("moneylender", "militia", "port", "poacher", "remodel", "remake"):
         if in_stock(game, c):
             return f"BUY {c}"
+
     if terminal_capacity(counts) <= 0 and in_stock(game, "village"):
         return "BUY village"
+
     if (
         in_stock(game, "smithy")
         and terminal_capacity(counts) > 0
         and counts.get("smithy", 0) < MAX_SMITHIES
     ):
         return "BUY smithy"
+
     if in_stock(game, "gardens"):
         return "BUY gardens"
+
     if in_stock(game, "silver"):
         return "BUY silver"
+
     return None
 
 
 def three_cost_buy(game: Game, coins: int) -> str | None:
     if coins < COINS_EQ_3:
         return None
+    # Prefer Workshop / Village; Woodcutter is terminal and weaker in engines.
     for c in ("workshop", "village", "woodcutter"):
         if in_stock(game, c):
             return f"BUY {c}"
