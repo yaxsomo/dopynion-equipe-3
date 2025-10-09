@@ -29,7 +29,7 @@ def get_strategy() -> dict[str, str]:
     return {"default_strategy": DEFAULT_STRATEGY}
 
 
-@app.post("/strategy/{strategy_name}", tags=["config"])
+@app.api_route("/strategy/{strategy_name}", methods=["GET", "POST"], tags=["config"])
 def change_strategy(strategy_name: str) -> dict[str, str]:
     """
     Change the default strategy for NEW games.
