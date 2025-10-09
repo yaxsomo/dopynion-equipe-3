@@ -35,6 +35,7 @@ from app.strategy.utils import (
     best_from,
     compute_treasure_coins,
     find_me,
+    in_stock,
     worst_in_hand,
 )
 
@@ -128,6 +129,8 @@ def play(game: Game, game_id: GameIdDependency, request: Request) -> DopynionRes
         (game.stock.quantities.get("province", 0) > 0 and coins_left >= BUY_PROVINCE_COINS)
         or (game.stock.quantities.get("gold", 0) > 0 and coins_left >= BUY_GOLD_COINS)
         or coins_left >= BUY_SILVER_COINS
+        # NEW: in Gardens plan, allow a buy even if coins < 3, so we can take Copper
+        or (state.get("gardens_plan", False) and in_stock(game, "copper"))
     )
     if buys_left <= 0 or not affordable_any:
         decision = "END_TURN"

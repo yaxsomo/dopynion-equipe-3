@@ -20,6 +20,7 @@ from .constants import (
     ENGINE_MF_SUM_THRESHOLD,
     FIVE_COST_PREFER,
     MAX_LABS,
+    MAX_SMITHIES,
     MIDGAME_PROVINCE_THRESHOLD,
     MIN_GREEN_TURN,
     OPENING_TURN_LIMIT,
@@ -168,7 +169,11 @@ def four_cost_buy(game: Game, coins: int, counts: dict[str, int]) -> str | None:
             return f"BUY {c}"
     if terminal_capacity(counts) <= 0 and in_stock(game, "village"):
         return "BUY village"
-    if in_stock(game, "smithy"):
+    if (
+        in_stock(game, "smithy")
+        and terminal_capacity(counts) > 0
+        and counts.get("smithy", 0) < MAX_SMITHIES
+    ):
         return "BUY smithy"
     if in_stock(game, "gardens"):
         return "BUY gardens"
