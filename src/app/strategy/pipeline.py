@@ -1,6 +1,4 @@
 from __future__ import annotations
-from .state import BuyCtx
-from .utils import in_stock, score_status, terminal_capacity
 from dopynion.data_model import Game
 from .constants import BUY_GOLD_COINS
 
@@ -16,11 +14,14 @@ from .buys import (
     three_cost_buy,
 )
 from .constants import (
+    COSTS,
     BUY_4_COST_COINS,
     BUY_PROVINCE_COINS,
     BUY_SILVER_COINS,
     RUSH_TURN,
 )
+from .state import BuyCtx
+from .utils import in_stock, score_status, terminal_capacity
 
 
 
@@ -143,33 +144,28 @@ def step_three(game: Game, coins: int) -> str | None:
 
 def step_last_resort_menu(game: Game, coins: int, counts: dict[str, int]) -> str | None:
     """
-    A guarded priority menu to avoid 'END_TURN' with buy left.
-    Avoids Copper; prefers payload or safe terminals only if capacity allows.
+    Guarded priority menu to avoid stalling with a buy left.
+    Fully cost-aware: only returns cards we can afford and that are in stock.
+    Also respects terminal capacity for Smithy.
     """
-    # Respect terminal capacity before picking terminals.
     cap = terminal_capacity(counts)
-
-    # Simple ordered pick-list by general usefulness at most boards.
-    # We gate terminal picks on cap and Smithy cap is already enforced upstream.
     ordered = [
-        "market",  # +$ / +Buy / +Action
-        "festival",  # strong payload + actions
-        "laboratory",  # draw + action (non-terminal)
-        "village",  # unlock more terminals
-        "smithy",  # draw, but only if cap > 0
-        "silver",  # baseline economy if still in stock
+        "market",
+        "festival",
+        "laboratory",
+        "village",
+        "smithy",
+        "silver",
     ]
-
     for card in ordered:
         if not in_stock(game, card):
             continue
         if card == "smithy" and cap <= 0:
             continue
-        # Check coin gates for treasures so we don't suggest unaffordable stuff
-        if card == "silver" and coins < BUY_SILVER_COINS:
+        cost = COSTS.get(card, 99)
+        if coins < cost:
             continue
         return f"BUY {card}"
-
     return None
 
 
