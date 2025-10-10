@@ -14,7 +14,6 @@ from .buys import (
     three_cost_buy,
 )
 from .constants import (
-    COSTS,
     BUY_4_COST_COINS,
     BUY_PROVINCE_COINS,
     BUY_SILVER_COINS,
@@ -22,42 +21,6 @@ from .constants import (
 )
 from .state import BuyCtx
 from .utils import in_stock, score_status, terminal_capacity
-
-
-
-def action_deficit(counts: dict[str, int]) -> int:
-    terminals = (
-        counts.get("smithy", 0)
-        + counts.get("militia", 0)
-        + counts.get("bandit", 0)
-        + counts.get("bureaucrat", 0)
-        + counts.get("chancellor", 0)
-        + counts.get("woodcutter", 0)
-    )
-    actions = (
-        counts.get("village", 0)
-        + counts.get("market", 0)
-        + counts.get("festival", 0)
-        + counts.get("laboratory", 0)
-    )
-    return max(0, terminals - actions)
-
-
-def step_combo_boost(game: Game, coins: int, counts: dict[str, int]) -> str | None:
-    deficit = action_deficit(counts)
-    if deficit <= 0:
-        return None
-    # Prefer strong +Actions first
-    if coins >= BUY_5_COST_COINS:
-        for c in ("market", "festival", "laboratory"):
-            if in_stock(game, c):
-                return f"BUY {c}"
-    if coins >= BUY_4_COST_COINS and in_stock(game, "village"):
-        return "BUY village"
-    # If we can at least buy Silver at 3 to help hit 5 next time
-    if coins >= BUY_SILVER_COINS and in_stock(game, "silver"):
-        return "BUY silver"
-    return None
 
 
 def step_opening(game: Game, coins: int, counts: dict[str, int], turn: int) -> str | None:
@@ -144,28 +107,33 @@ def step_three(game: Game, coins: int) -> str | None:
 
 def step_last_resort_menu(game: Game, coins: int, counts: dict[str, int]) -> str | None:
     """
-    Guarded priority menu to avoid stalling with a buy left.
-    Fully cost-aware: only returns cards we can afford and that are in stock.
-    Also respects terminal capacity for Smithy.
+    A guarded priority menu to avoid 'END_TURN' with buy left.
+    Avoids Copper; prefers payload or safe terminals only if capacity allows.
     """
+    # Respect terminal capacity before picking terminals.
     cap = terminal_capacity(counts)
+
+    # Simple ordered pick-list by general usefulness at most boards.
+    # We gate terminal picks on cap and Smithy cap is already enforced upstream.
     ordered = [
-        "market",
-        "festival",
-        "laboratory",
-        "village",
-        "smithy",
-        "silver",
+        "market",  # +$ / +Buy / +Action
+        "festival",  # strong payload + actions
+        "laboratory",  # draw + action (non-terminal)
+        "village",  # unlock more terminals
+        "smithy",  # draw, but only if cap > 0
+        "silver",  # baseline economy if still in stock
     ]
+
     for card in ordered:
         if not in_stock(game, card):
             continue
         if card == "smithy" and cap <= 0:
             continue
-        cost = COSTS.get(card, 99)
-        if coins < cost:
+        # Check coin gates for treasures so we don't suggest unaffordable stuff
+        if card == "silver" and coins < BUY_SILVER_COINS:
             continue
         return f"BUY {card}"
+
     return None
 
 
@@ -179,7 +147,6 @@ def choose_buy_action(game: Game, coins: int, me_idx: int, state: dict[str, obje
 
     steps = (
         lambda: step_opening(game, coins, counts, turn),
-        lambda: step_combo_boost(game, coins, counts),
         lambda: step_province_if_ok(game, coins, counts, ctx),
         lambda: step_gold_if_building(game, coins, counts, ctx),
         lambda: step_vp_override(game, coins, ctx),  # NEW: more aggressive greening window
