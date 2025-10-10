@@ -1,6 +1,6 @@
 from __future__ import annotations
-
 from dopynion.data_model import Game
+from .constants import BUY_GOLD_COINS
 
 from .buys import (
     early_province_ok,
@@ -39,7 +39,6 @@ def step_gold_if_building(
 ) -> str | None:
     # Buy Gold at 6 if we *aren't* in an early-province window.
     # This accelerates the deck into province range.
-    from .constants import BUY_GOLD_COINS
 
     if coins >= BUY_GOLD_COINS and in_stock(game, "gold"):
         if not early_province_ok(counts, ctx.provinces_left, ctx.turn, ctx.score_gap):
