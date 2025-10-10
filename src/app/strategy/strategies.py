@@ -1,7 +1,6 @@
 from __future__ import annotations
-
+from .utils import in_stock, terminal_capacity
 from collections.abc import Callable
-
 from dopynion.data_model import Game
 
 from . import pipeline  # reuse baseline steps
@@ -15,7 +14,6 @@ from .constants import (
     MAX_SMITHIES,
     RUSH_TURN,
 )
-from .utils import in_stock, terminal_capacity
 
 # ---- Strategy signature ----
 BuyFn = Callable[[Game, int, int, dict[str, object]], str]

@@ -1,4 +1,6 @@
 from __future__ import annotations
+from .state import BuyCtx
+from .utils import in_stock, score_status, terminal_capacity
 from dopynion.data_model import Game
 from .constants import BUY_GOLD_COINS
 
@@ -19,8 +21,42 @@ from .constants import (
     BUY_SILVER_COINS,
     RUSH_TURN,
 )
-from .state import BuyCtx
-from .utils import in_stock, score_status, terminal_capacity
+
+
+
+def action_deficit(counts: dict[str, int]) -> int:
+    terminals = (
+        counts.get("smithy", 0)
+        + counts.get("militia", 0)
+        + counts.get("bandit", 0)
+        + counts.get("bureaucrat", 0)
+        + counts.get("chancellor", 0)
+        + counts.get("woodcutter", 0)
+    )
+    actions = (
+        counts.get("village", 0)
+        + counts.get("market", 0)
+        + counts.get("festival", 0)
+        + counts.get("laboratory", 0)
+    )
+    return max(0, terminals - actions)
+
+
+def step_combo_boost(game: Game, coins: int, counts: dict[str, int]) -> str | None:
+    deficit = action_deficit(counts)
+    if deficit <= 0:
+        return None
+    # Prefer strong +Actions first
+    if coins >= BUY_5_COST_COINS:
+        for c in ("market", "festival", "laboratory"):
+            if in_stock(game, c):
+                return f"BUY {c}"
+    if coins >= BUY_4_COST_COINS and in_stock(game, "village"):
+        return "BUY village"
+    # If we can at least buy Silver at 3 to help hit 5 next time
+    if coins >= BUY_SILVER_COINS and in_stock(game, "silver"):
+        return "BUY silver"
+    return None
 
 
 def step_opening(game: Game, coins: int, counts: dict[str, int], turn: int) -> str | None:
@@ -129,11 +165,11 @@ def step_last_resort_menu(game: Game, coins: int, counts: dict[str, int]) -> str
             continue
         if card == "smithy" and cap <= 0:
             continue
-        # New: cost-aware filters for *all* picks, not just silver
-        cost = COSTS.get(card, 0)
-        if coins < cost:
+        # Check coin gates for treasures so we don't suggest unaffordable stuff
+        if card == "silver" and coins < BUY_SILVER_COINS:
             continue
         return f"BUY {card}"
+
     return None
 
 
@@ -147,6 +183,7 @@ def choose_buy_action(game: Game, coins: int, me_idx: int, state: dict[str, obje
 
     steps = (
         lambda: step_opening(game, coins, counts, turn),
+        lambda: step_combo_boost(game, coins, counts),
         lambda: step_province_if_ok(game, coins, counts, ctx),
         lambda: step_gold_if_building(game, coins, counts, ctx),
         lambda: step_vp_override(game, coins, ctx),  # NEW: more aggressive greening window

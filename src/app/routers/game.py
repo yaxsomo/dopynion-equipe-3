@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 from dopynion.data_model import CardNameAndHand, Game, Hand, MoneyCardsInHand, PossibleCards
 from fastapi import APIRouter, Request
 
