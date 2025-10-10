@@ -158,6 +158,20 @@ def play(game: Game, game_id: GameIdDependency, request: Request) -> DopynionRes
         chosen=decision,
         gardens_plan=state.get("gardens_plan", False),
     )
+    # --- FINAL LEGALITY GUARD ---
+    if decision.startswith("BUY"):
+        try:
+            _, _card = decision.split(" ", 1)
+            _card = _card.strip().lower()
+            _cost = COSTS.get(_card, 0)
+            # Disallow impossible purchases: no buys, not enough coins, or pile empty
+            if buys_left <= 0 or coins_left < _cost or game.stock.quantities.get(_card, 0) <= 0:
+                log_decision(game_id, "OVERRULED_BUY_AS_END_TURN", {"requested": decision, "coins_left": coins_left, "buys_left": buys_left})
+                decision = "END_TURN"
+        except Exception:
+            # If anything goes wrong parsing, end turn safely
+            decision = "END_TURN"
+
 
     if decision.startswith("BUY"):
         state["bought"] = True

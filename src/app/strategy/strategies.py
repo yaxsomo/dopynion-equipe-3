@@ -254,124 +254,12 @@ def _remodel_market_engine(game: Game, coins: int, me_idx: int, state: dict[str,
 
 # ===== Registry =============================================================
 
-
-# === Strategy: Attack Lock + Gardens ========================================
-
-from .utils import in_stock, best_from, terminal_capacity, score_status
-
-def _attack_lock_gardens(game: Game, coins: int, me_idx: int, state: dict[str, object]) -> str:
-    """
-    Penalty-first strategy that pressures opponents with attacks (Bandit/Bureaucrat),
-    uses Chancellor for cycling, and pivots to Gardens if the game stalls or we are behind,
-    while still respecting terminal capacity and late-game VP pressure.
-    Heuristics:
-      - Early: Prefer Bandit @5 (up to 2), Bureaucrat @4 (up to 2), Chancellor @3 (1–2 max).
-      - Economy: Prefer Gold (including Bandit gains), then Market/Festival for +Buy/+Actions.
-      - VP: Standard pressure window; Province at 8 once engine/economy stable or late.
-      - Gardens pivot: if behind and +Buy exists, prefer Gardens and cheap cards.
-    """
-    counts: dict[str, int] = state["counts"]  # type: ignore[assignment]
-    turn = int(state.get("turn", 1))
-    cap = terminal_capacity(counts)
-
-    # --- Always check late VP pressure first
-    vp = _vp_pressure_fallback(game, coins, turn)
-    if vp:
-        return vp
-
-    # --- Province opportunistically (when rich enough and not too early)
-    provinces_left = game.stock.quantities.get("province", 0)
-    my, opp = score_status(game, me_idx)
-    score_gap = my - opp
-
-    if coins >= BUY_PROVINCE_COINS and in_stock(game, "province"):
-        # Greedily take a Province if:
-        # - Late enough or low provinces, OR
-        # - We're clearly ahead, OR
-        # - We already have solid payload (at least one Gold and one attack).
-        solid_payload = counts.get("gold", 0) >= 1 and (counts.get("bandit", 0) + counts.get("bureaucrat", 0)) >= 1
-        if turn >= 14 or provinces_left <= ENDGAME_PROVINCE_THRESHOLD + 2 or score_gap >= 6 or solid_payload:
-            return "BUY province"
-
-    # --- Attack focus while building
-    # At 5: take Bandit up to 2 copies (if capacity allows)
-    if coins >= BUY_5_COST_COINS:
-        if in_stock(game, "bandit") and counts.get("bandit", 0) < 2 and cap > 0:
-            return "BUY bandit"
-        # Good 5s for payload / reliability
-        for c in ("laboratory", "market", "festival"):
-            if in_stock(game, c):
-                return f"BUY {c}"
-
-    # At 4: Favor Bureaucrat (up to 2), then Village if we need actions
-    if coins >= BUY_4_COST_COINS:
-        if in_stock(game, "bureaucrat") and counts.get("bureaucrat", 0) < 2 and cap > -1:
-            return "BUY bureaucrat"
-        if in_stock(game, "village") and cap <= 0:
-            return "BUY village"
-
-    # Chancellor at 3: one early for cycling; a second is okay if terminal capacity allows
-    if coins >= BUY_SILVER_COINS:
-        if in_stock(game, "chancellor"):
-            want = 1 if turn < 8 else 2  # allow a second later if capacity and need coins
-            if counts.get("chancellor", 0) < want and cap > 0:
-                return "BUY chancellor"
-
-        # While building, keep at least two Silvers to smooth economy
-        if counts.get("silver", 0) < 2 and in_stock(game, "silver"):
-            return "BUY silver"
-
-    # Gold at 6+ (unless we already took something above)
-    if coins >= BUY_GOLD_COINS and in_stock(game, "gold"):
-        return "BUY gold"
-
-    # --- Gardens pivot: if we're behind and +Buy exists, push Gardens at 4
-    buys_exist = in_stock(game, "market") or in_stock(game, "festival")
-    if score_gap <= -6 and buys_exist:
-        if coins >= BUY_4_COST_COINS and in_stock(game, "gardens"):
-            return "BUY gardens"
-        # Support payload for Gardens plan at 5
-        if coins >= BUY_5_COST_COINS:
-            for c in ("market", "festival", "laboratory"):
-                if in_stock(game, c):
-                    return f"BUY {c}"
-
-    # Safety: Duchy mid/late if behind and we can't reach Province
-    if coins >= BUY_5_COST_COINS and in_stock(game, "duchy") and (turn >= 16 or provinces_left <= 4):
-        return "BUY duchy"
-
-    # Last resorts by usefulness / safety
-    if coins >= BUY_5_COST_COINS:
-        for c in ("laboratory", "market", "festival", "smithy"):
-            if c == "smithy" and cap <= 0:
-                continue
-            if in_stock(game, c):
-                return f"BUY {c}"
-
-    if coins >= BUY_4_COST_COINS:
-        for c in ("village", "bureaucrat", "gardens", "remodel"):
-            if c == "bureaucrat" and counts.get("bureaucrat", 0) >= 3:
-                continue
-            if c == "gardens" and not buys_exist and turn < 14:
-                continue
-            if in_stock(game, c):
-                return f"BUY {c}"
-
-    if coins >= BUY_SILVER_COINS and in_stock(game, "silver"):
-        return "BUY silver"
-
-    if coins >= 2 and in_stock(game, "estate") and (turn >= 18 or provinces_left <= 2):
-        return "BUY estate"
-
-    return "END_TURN"
-
 STRATEGY_BUYERS: dict[str, BuyFn] = {
     "baseline": pipeline.choose_buy_action,  # your improved default
     "bm_smithy": _bm_smithy,
     "village_smithy": _village_smithy,
     "militia_market_counter": _militia_market_counter,
     "remodel_market_engine": _remodel_market_engine,
-    "attack_lock_gardens": _attack_lock_gardens,
 }
 
 

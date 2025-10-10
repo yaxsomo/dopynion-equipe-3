@@ -129,11 +129,11 @@ def step_last_resort_menu(game: Game, coins: int, counts: dict[str, int]) -> str
             continue
         if card == "smithy" and cap <= 0:
             continue
-        # Check coin gates for treasures so we don't suggest unaffordable stuff
-        if card == "silver" and coins < BUY_SILVER_COINS:
+        # New: cost-aware filters for *all* picks, not just silver
+        cost = COSTS.get(card, 0)
+        if coins < cost:
             continue
         return f"BUY {card}"
-
     return None
 
 
