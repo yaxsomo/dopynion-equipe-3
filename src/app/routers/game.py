@@ -29,8 +29,7 @@ from app.strategy.constants import (
     TEAM_NAME,
 )
 from app.strategy.selector import should_pivot_to_gardens
-from app.strategy.state import TURN_STATE, get
-from app.strategy.utils import in_stock_state
+from app.strategy.state import TURN_STATE, get_state
 from app.strategy.strategies import choose_buy_action_for_strategy
 from app.strategy.utils import (
     best_from,
@@ -160,48 +159,19 @@ def play(game: Game, game_id: GameIdDependency, request: Request) -> DopynionRes
         gardens_plan=state.get("gardens_plan", False),
     )
 
-    
-    # ---- FINAL LEGALITY GUARD: never send an unaffordable or out-of-stock BUY ----
     if decision.startswith("BUY"):
+        state["bought"] = True
         try:
-            _, _card = decision.split(" ", 1)
-            _card = _card.strip().lower()
-            _cost = COSTS.get(_card, 99)
-            _stock_ok = in_stock(game, _card)
-            _buys_ok = buys_left > 0
-            _coins_ok = coins_left >= _cost
-            if not (_buys_ok and _coins_ok and _stock_ok):
-                def _affordable_fallback() -> str:
-                    if coins_left >= BUY_PROVINCE_COINS and in_stock(game, "province"):
-                        return "BUY province"
-                    if coins_left >= BUY_GOLD_COINS and in_stock(game, "gold"):
-                        return "BUY gold"
-                    if coins_left >= BUY_SILVER_COINS and in_stock(game, "silver"):
-                        return "BUY silver"
-                    for _c in ("market", "festival", "laboratory", "village", "smithy", "woodcutter"):
-                        if in_stock(game, _c) and COSTS.get(_c, 99) <= coins_left:
-                            return f"BUY {_c}"
-                    if state.get("gardens_plan", False) and in_stock(game, "copper"):
-                        extra_buys = int(state.get("extra_buys", 0))
-                        if extra_buys > 0 or buys_left > 1:
-                            return "BUY copper"
-                    return "END_TURN"
-                decision = _affordable_fallback()
+            _, card = decision.split(" ", 1)
+            card = card.strip().lower()
+            cost = COSTS.get(card, 0)
+            state["coins_left"] = max(0, coins_left - cost)
+            state["buys_left"] = max(0, int(state.get("buys_left", 1)) - 1)
+            counts = state["counts"]  # type: ignore[assignment]
+            counts[card] += 1
         except Exception:
-            decision = "END_TURN"
-    if decision.startswith("BUY"):
-            state["bought"] = True
-            try:
-                _, card = decision.split(" ", 1)
-                card = card.strip().lower()
-                cost = COSTS.get(card, 0)
-                state["coins_left"] = max(0, coins_left - cost)
-                state["buys_left"] = max(0, int(state.get("buys_left", 1)) - 1)
-                counts = state["counts"]  # type: ignore[assignment]
-                counts[card] += 1
-            except Exception:
-                state["coins_left"] = coins_left
-                state["buys_left"] = max(0, int(state.get("buys_left", 1)) - 1)
+            state["coins_left"] = coins_left
+            state["buys_left"] = max(0, int(state.get("buys_left", 1)) - 1)
 
     log_decision(game_id, decision)
     return DopynionResponseStr(game_id=game_id, decision=decision)
