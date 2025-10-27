@@ -7,47 +7,7 @@ from .constants import (
     TEAM_NAME,
     TERMINAL_ACTIONS,
 )
-from typing import Any
 
-def in_stock_state(state_or_game: Any, card: str) -> bool:
-    """
-    Return True if the supply pile for `card` has > 0 copies remaining.
-    Accepts:
-      - a Game (with .stock.quantities),
-      - a state dict with a 'game' entry,
-      - a dict that itself looks like stock/quantities (mapping card -> qty).
-    """
-    try:
-        # Case 1: it's a Game-like object with .stock.quantities
-        stock = getattr(getattr(state_or_game, "stock", None), "quantities", None)
-        if isinstance(stock, dict):
-            return (stock or {}).get(card, 0) > 0
-
-        # Case 2: it's a state dict that contains a Game under 'game'
-        if isinstance(state_or_game, dict):
-            game = state_or_game.get("game")
-            if game is not None:
-                stock = getattr(getattr(game, "stock", None), "quantities", None)
-                if isinstance(stock, dict):
-                    return (stock or {}).get(card, 0) > 0
-
-            # Case 3: it might already be a quantities-like dict
-            # (either the whole dict is quantities, or under 'stock')
-            maybe_qty = state_or_game.get("stock", state_or_game)
-            if isinstance(maybe_qty, dict):
-                return (maybe_qty or {}).get(card, 0) > 0
-
-    except Exception:
-        pass
-
-    return False
-
-# If you maintain __all__, export it:
-try:
-    __all__.append("in_stock_state")  # type: ignore[name-defined]
-except Exception:
-    # If __all__ isn't defined, it's fine to ignore.
-    pass
 
 def in_stock(game: Game, card: str) -> bool:
     return (game.stock.quantities or {}).get(card, 0) > 0
