@@ -15,7 +15,6 @@ from .constants import (
     MAX_SMITHIES,
     RUSH_TURN,
 )
-from .utils import in_stock, terminal_capacity
 
 # === Strategy: combo_engine (draw + actions focus, no copper) ================
 from .utils import in_stock, terminal_capacity, score_status
