@@ -104,37 +104,53 @@ def step_four(game: Game, coins: int, counts: dict[str, int]) -> str | None:
 def step_three(game: Game, coins: int) -> str | None:
     return three_cost_buy(game, coins)
 
-
 def step_last_resort_menu(game: Game, coins: int, counts: dict[str, int]) -> str | None:
     """
-    A guarded priority menu to avoid 'END_TURN' with buy left.
-    Avoids Copper; prefers payload or safe terminals only if capacity allows.
+    Guarded priority menu; fully cost-aware; never buys copper.
     """
-    # Respect terminal capacity before picking terminals.
     cap = terminal_capacity(counts)
-
-    # Simple ordered pick-list by general usefulness at most boards.
-    # We gate terminal picks on cap and Smithy cap is already enforced upstream.
-    ordered = [
-        "market",  # +$ / +Buy / +Action
-        "festival",  # strong payload + actions
-        "laboratory",  # draw + action (non-terminal)
-        "village",  # unlock more terminals
-        "smithy",  # draw, but only if cap > 0
-        "silver",  # baseline economy if still in stock
-    ]
-
+    ordered = ["market","festival","laboratory","village","smithy","silver"]
     for card in ordered:
         if not in_stock(game, card):
             continue
         if card == "smithy" and cap <= 0:
             continue
-        # Check coin gates for treasures so we don't suggest unaffordable stuff
-        if card == "silver" and coins < BUY_SILVER_COINS:
+        cost = COSTS.get(card, 99)
+        if coins < cost:
             continue
         return f"BUY {card}"
-
     return None
+
+# def step_last_resort_menu(game: Game, coins: int, counts: dict[str, int]) -> str | None:
+#     """
+#     A guarded priority menu to avoid 'END_TURN' with buy left.
+#     Avoids Copper; prefers payload or safe terminals only if capacity allows.
+#     """
+#     # Respect terminal capacity before picking terminals.
+#     cap = terminal_capacity(counts)
+
+#     # Simple ordered pick-list by general usefulness at most boards.
+#     # We gate terminal picks on cap and Smithy cap is already enforced upstream.
+#     ordered = [
+#         "market",  # +$ / +Buy / +Action
+#         "festival",  # strong payload + actions
+#         "laboratory",  # draw + action (non-terminal)
+#         "village",  # unlock more terminals
+#         "smithy",  # draw, but only if cap > 0
+#         "silver",  # baseline economy if still in stock
+#     ]
+
+#     for card in ordered:
+#         if not in_stock(game, card):
+#             continue
+#         if card == "smithy" and cap <= 0:
+#             continue
+#         # Check coin gates for treasures so we don't suggest unaffordable stuff
+#         if card == "silver" and coins < BUY_SILVER_COINS:
+#             continue
+#         return f"BUY {card}"
+
+#     return None
 
 
 def choose_buy_action(game: Game, coins: int, me_idx: int, state: dict[str, object]) -> str:
