@@ -207,3 +207,108 @@ for _name in [
 ]:
     if _name not in __all__:
         __all__.append(_name)
+# --- Coin computation helpers -------------------------------------------------
+from typing import Any, Dict, Iterable
+
+# Base Dominion treasure values (extend if you use expansions)
+_TREASURE_VALUES: Dict[str, int] = {
+    "copper": 1,
+    "silver": 2,
+    "gold": 3,
+    # Uncomment/extend if applicable:
+    # "platinum": 5,
+}
+
+def _to_quantities_from_hand(hand_obj: Any) -> Dict[str, int]:
+    """
+    Normalize a player's hand into {card_name_lower: count}.
+    Supports:
+      - hand.quantities (dict-like)
+      - hand as a list/tuple of card names
+      - hand as a dict {card_name: count}
+    """
+    # Case 1: object with .quantities
+    qty = getattr(hand_obj, "quantities", None)
+    if isinstance(qty, dict):
+        return {str(k).lower(): int(v) for k, v in qty.items()}
+
+    # Case 2: iterable of names
+    if isinstance(hand_obj, (list, tuple)):
+        out: Dict[str, int] = {}
+        for x in hand_obj:
+            k = str(x).lower()
+            out[k] = out.get(k, 0) + 1
+        return out
+
+    # Case 3: already a dict
+    if isinstance(hand_obj, dict):
+        return {str(k).lower(): int(v) for k, v in hand_obj.items()}
+
+    return {}
+
+def _extract_player_hand(game_or_state: Any, me_idx: Any) -> Any:
+    """Return a 'hand' object from a Game-like or state dict."""
+    # Prefer a direct 'me' object with .hand
+    me = safe_get_me(game_or_state, me_idx)
+    if me is not None:
+        h = getattr(me, "hand", None) or (me.get("hand") if isinstance(me, dict) else None)
+        if h is not None:
+            return h
+
+    # Try game.me.hand if me_idx lookup failed
+    try:
+        me_obj = getattr(game_or_state, "me", None)
+        if me_obj is not None:
+            h = getattr(me_obj, "hand", None)
+            if h is not None:
+                return h
+    except Exception:
+        pass
+
+    # Try state dict path: state["game"]["players"][me_idx]["hand"]
+    if isinstance(game_or_state, dict):
+        g = game_or_state.get("game")
+        if g is not None:
+            try:
+                players = getattr(g, "players", None) or getattr(g, "players_info", None) or getattr(g, "playersInfos", None)
+                if players and 0 <= int(me_idx) < len(players):
+                    h = getattr(players[int(me_idx)], "hand", None)
+                    if h is not None:
+                        return h
+            except Exception:
+                pass
+
+    return None
+
+def compute_treasure_coins(game_or_state: Any, me_idx: Any) -> int:
+    """
+    Sum coin value of treasures currently in hand (Copper/Silver/Gold...).
+    Does NOT include +$ from actions; see compute_total_coins for that.
+    """
+    hand = _extract_player_hand(game_or_state, me_idx)
+    q = _to_quantities_from_hand(hand) if hand is not None else {}
+    total = 0
+    for name, cnt in q.items():
+        total += _TREASURE_VALUES.get(name, 0) * int(cnt)
+    return total
+
+def compute_total_coins(game_or_state: Any, me_idx: Any, state: Any = None) -> int:
+    """
+    Treasures in hand + action coins from state (if provided).
+    Safe to call even if state is None or missing fields.
+    """
+    base = compute_treasure_coins(game_or_state, me_idx)
+    bonus = 0
+    if isinstance(state, dict):
+        try:
+            bonus = int(state.get("action_coins", 0))
+        except Exception:
+            bonus = 0
+    return base + bonus
+
+# Export
+try:
+    __all__.extend(["compute_treasure_coins", "compute_total_coins"])
+except Exception:
+    pass
+
