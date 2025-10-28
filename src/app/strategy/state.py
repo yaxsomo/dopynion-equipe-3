@@ -1,22 +1,31 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import Dict
 
-# Per-game, in-memory turn state.
+# --- Context object expected by older pipeline/strategies ---------------------
+# Keep it minimal but compatible with existing code.
+@dataclass(frozen=True)
+class BuyCtx:
+    provinces_left: int   # number of Province cards remaining in the supply
+    score_gap: int        # my_score - best_opponent_score (positive if we're ahead)
+    turn: int             # current turn number (1-based)
+
+# --- Per-game, in-memory state ------------------------------------------------
 # Keys are X-Game-Id; values are dicts mutated across a single match.
 TURN_STATE: Dict[str, Dict[str, object]] = defaultdict(
     lambda: {
         "turn": 1,
-        "phase": "ACTION",          # optional, used by logs/heuristics
-        "bought": False,            # whether we already bought something this turn
-        "counts": defaultdict(int), # card -> count we've bought so far
+        "phase": "ACTION",           # optional, used by logs/heuristics
+        "bought": False,             # whether we already bought something this turn
+        "counts": defaultdict(int),  # card -> count we've bought so far
 
         # Buy-phase bookkeeping (re-initialized at start of each turn)
-        "action_coins": 0,          # +$ from action cards played this turn
-        "extra_buys": 0,            # +Buys from action cards played this turn
-        "coins_left": 0,            # mutable pool we decrement after each BUY
-        "buys_left": 1,             # mutable count we decrement after each BUY
+        "action_coins": 0,           # +$ from action cards played this turn
+        "extra_buys": 0,             # +Buys from action cards played this turn
+        "coins_left": 0,             # mutable pool we decrement after each BUY
+        "buys_left": 1,              # mutable count we decrement after each BUY
         "initialized_resources": False,  # set True once per turn when we first enter BUY
     }
 )
@@ -41,4 +50,4 @@ def reset_for_new_turn(game_id: str) -> None:
     st["buys_left"] = 1
     st["initialized_resources"] = False
 
-__all__ = ["TURN_STATE", "get", "get_state", "reset_for_new_turn"]
+__all__ = ["BuyCtx", "TURN_STATE", "get", "get_state", "reset_for_new_turn"]
