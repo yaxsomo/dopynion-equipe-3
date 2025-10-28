@@ -311,4 +311,92 @@ try:
     __all__.extend(["compute_treasure_coins", "compute_total_coins"])
 except Exception:
     pass
+# --- Player lookup helpers ----------------------------------------------------
+from typing import Any, Optional, Tuple, List
 
+def _extract_players(obj: Any) -> List[Any]:
+    """Return a players list from common shapes or [] if not found."""
+    try:
+        for name in ("players", "players_info", "playersInfos", "seats"):
+            pl = getattr(obj, name, None)
+            if isinstance(pl, (list, tuple)):
+                return list(pl)
+        if isinstance(obj, dict):
+            for name in ("players", "players_info", "playersInfos", "seats"):
+                pl = obj.get(name)
+                if isinstance(pl, (list, tuple)):
+                    return list(pl)
+    except Exception:
+        pass
+    return []
+
+def find_me(game: Any, me_idx: Any = None) -> Tuple[Optional[Any], Optional[int]]:
+    """
+    Return (my_player_obj, my_index) in a best-effort way.
+
+    Tries, in order:
+      1) game.me is a player object  -> return it; try to resolve its index in players list
+      2) game.me is an int           -> use as index
+      3) provided me_idx             -> use as index into players
+      4) scan players for flags      -> player with .is_me or .me == True
+    Works with object- or dict-shaped game payloads.
+    """
+    if game is None:
+        return None, None
+
+    players = _extract_players(game)
+
+    # 1) game.me is already a player object?
+    try:
+        me_field = getattr(game, "me", None)
+    except Exception:
+        me_field = None
+    if me_field is not None and not isinstance(me_field, (int, float)):
+        me_obj = me_field
+        idx = None
+        # Try to find its index by identity or equality
+        for i, p in enumerate(players):
+            if p is me_obj or p == me_obj:
+                idx = i
+                break
+        return me_obj, idx
+
+    # 2) game.me is an index?
+    if isinstance(me_field, (int, float)):
+        i = int(me_field)
+        if 0 <= i < len(players):
+            return players[i], i
+        return None, i
+
+    # 3) explicit me_idx passed in?
+    try:
+        if me_idx is not None:
+            i = int(me_idx)
+            if 0 <= i < len(players):
+                return players[i], i
+            return None, i
+    except Exception:
+        pass
+
+    # 4) scan for a flagged player (is_me / me)
+    for i, p in enumerate(players):
+        try:
+            if getattr(p, "is_me", False) or getattr(p, "me", False):
+                return p, i
+            if isinstance(p, dict) and (p.get("is_me") or p.get("me")):
+                return p, i
+        except Exception:
+            continue
+
+    return None, None
+
+def find_me_idx(game: Any, me_idx: Any = None) -> Optional[int]:
+    """Return my index only (uses the same logic as find_me)."""
+    _, idx = find_me(game, me_idx)
+    return idx
+
+# Export names if you keep __all__
+try:
+    __all__.extend(["find_me", "find_me_idx"])
+except Exception:
+    pass
