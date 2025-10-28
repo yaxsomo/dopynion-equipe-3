@@ -10,7 +10,7 @@ app = FastAPI(title="Equipe 3 API", version="0.1.0")
 
 # --- Runtime-configurable default strategy for new games ---
 # This is used ONLY when a client doesn't send the X-Strategy header.
-DEFAULT_STRATEGY = "baseline"
+DEFAULT_STRATEGY = "combo_engine"
 
 
 @app.get("/", tags=["meta"], response_class=HTMLResponse)
