@@ -1,21 +1,59 @@
 from __future__ import annotations
 
-# Unified utility exports for strategies/pipeline/actions.
-# This file is defensive about different Game/Player shapes so imports never fail.
+"""
+Unified utilities for the Dominion bot.
 
-from typing import Any, Iterable, Optional, Tuple, Dict
+Exports (so your imports won't break again):
+- Stock / supply:    in_stock, in_stock_state, best_from
+- Player access:     safe_get_me, find_me, find_me_idx
+- Scoring / engine:  score_status, terminal_capacity
+- Coins:             compute_treasure_coins, compute_total_coins
+- Hand helpers:      hand_counts, worst_in_hand   (robust to many input shapes)
+
+All functions are defensive: they accept object- or dict-shaped game payloads.
+"""
+
+from typing import Any, Iterable, Optional, Tuple, Dict, List
+
+# -----------------------------------------------------------------------------
+# Low-level helpers (introspect game/state shapes)
+# -----------------------------------------------------------------------------
+
+def _get_attr_or_key(obj: Any, *names: str):
+    """Return the first attribute/key found among names, else None."""
+    for n in names:
+        if hasattr(obj, n):
+            return getattr(obj, n)
+    if isinstance(obj, dict):
+        for n in names:
+            if n in obj:
+                return obj[n]
+    return None
 
 
-# ---------------------------------------------------------------------------
-# Stock helpers
-# ---------------------------------------------------------------------------
+def _extract_players(obj: Any) -> List[Any]:
+    """Return a players list from common shapes or [] if not found."""
+    try:
+        for name in ("players", "players_info", "playersInfos", "seats"):
+            pl = getattr(obj, name, None)
+            if isinstance(pl, (list, tuple)):
+                return list(pl)
+        if isinstance(obj, dict):
+            for name in ("players", "players_info", "playersInfos", "seats"):
+                pl = obj.get(name)
+                if isinstance(pl, (list, tuple)):
+                    return list(pl)
+    except Exception:
+        pass
+    return []
+
 
 def _extract_stock(obj: Any) -> dict:
     """
-    Try to obtain a {card_name: qty} mapping from different shapes:
-    - Game-like: game.stock.quantities (dict)
+    Try to get a {card_name: qty} mapping from different shapes:
+    - Game-like: game.stock.quantities
     - state dict: state["game"].stock.quantities
-    - dict that already looks like quantities (mapping card -> qty)
+    - dict that already looks like quantities
     """
     try:
         stock = getattr(getattr(obj, "stock", None), "quantities", None)
@@ -35,53 +73,92 @@ def _extract_stock(obj: Any) -> dict:
     return {}
 
 
+def _extract_player_hand(game_or_state: Any, me_idx: Any) -> Any:
+    """Return a 'hand' object from a Game-like or state dict."""
+    me = safe_get_me(game_or_state, me_idx)
+    if me is not None:
+        h = getattr(me, "hand", None) or (me.get("hand") if isinstance(me, dict) else None)
+        if h is not None:
+            return h
+
+    # Try game.me.hand if me_idx lookup failed
+    try:
+        me_obj = getattr(game_or_state, "me", None)
+        if me_obj is not None:
+            h = getattr(me_obj, "hand", None)
+            if h is not None:
+                return h
+    except Exception:
+        pass
+
+    # Try state dict path: state["game"]["players"][me_idx]["hand"]
+    if isinstance(game_or_state, dict):
+        g = game_or_state.get("game")
+        if g is not None:
+            try:
+                players = getattr(g, "players", None) or getattr(g, "players_info", None) or getattr(g, "playersInfos", None)
+                if players and 0 <= int(me_idx) < len(players):
+                    h = getattr(players[int(me_idx)], "hand", None)
+                    if h is not None:
+                        return h
+            except Exception:
+                pass
+
+    return None
+
+
+def _to_quantities_from_hand(hand_obj: Any) -> Dict[str, int]:
+    """
+    Normalize a 'hand' into {card_name_lower: count}.
+    Supports:
+      - hand.quantities (dict)
+      - hand as a list/tuple of card names
+      - hand as a dict {card_name: count}
+    """
+    qty = getattr(hand_obj, "quantities", None)
+    if isinstance(qty, dict):
+        return {str(k).lower(): int(v) for k, v in qty.items()}
+
+    if isinstance(hand_obj, (list, tuple)):
+        out: Dict[str, int] = {}
+        for x in hand_obj:
+            k = str(x).lower()
+            out[k] = out.get(k, 0) + 1
+        return out
+
+    if isinstance(hand_obj, dict):
+        return {str(k).lower(): int(v) for k, v in hand_obj.items()}
+
+    return {}
+
+# -----------------------------------------------------------------------------
+# Public: stock / supply
+# -----------------------------------------------------------------------------
+
 def in_stock(game_or_state: Any, card: str) -> bool:
     """True if the supply pile for `card` has > 0 copies remaining."""
     stock = _extract_stock(game_or_state)
     return int(stock.get(card.lower(), 0)) > 0
 
 
-# Backward-/side-compat shim some callers use
 def in_stock_state(game_or_state: Any, card: str) -> bool:  # alias
     return in_stock(game_or_state, card)
 
 
 def best_from(game_or_state: Any, candidates: Iterable[str]) -> Optional[str]:
-    """
-    Return the first card in `candidates` that is currently in stock, else None.
-    (Just a tiny helper to avoid boilerplate in strategies.)
-    """
+    """Return the first in-stock card among candidates, else None."""
     for c in candidates:
         if in_stock(game_or_state, c):
             return c
     return None
 
-
-# ---------------------------------------------------------------------------
-# Player helpers
-# ---------------------------------------------------------------------------
-
-def _get_attr_or_key(obj: Any, *names: str):
-    """Return the first attribute/key found among names, else None."""
-    for n in names:
-        if hasattr(obj, n):
-            return getattr(obj, n)
-    if isinstance(obj, dict):
-        for n in names:
-            if n in obj:
-                return obj[n]
-    return None
-
+# -----------------------------------------------------------------------------
+# Public: player access
+# -----------------------------------------------------------------------------
 
 def safe_get_me(game: Any, me_idx: Any) -> Optional[Any]:
     """
     Best-effort retrieval of 'my' player object from a Game or game-like dict.
-    Tries (in order):
-    - game.me (if it's already a player object)
-    - game.me as an index into game.players / players_info / playersInfos
-    - me_idx (provided by the server) into the same players list
-    - a player with 'is_me' / 'me' flag
-    Returns the player object or None if not found.
     """
     if game is None:
         return None
@@ -111,15 +188,67 @@ def safe_get_me(game: Any, me_idx: Any) -> Optional[Any]:
     return None
 
 
-# ---------------------------------------------------------------------------
-# Scoring / capacity
-# ---------------------------------------------------------------------------
+def find_me(game: Any, me_idx: Any = None) -> Tuple[Optional[Any], Optional[int]]:
+    """
+    Return (my_player_obj, my_index) best-effort. Robust to various shapes.
+    """
+    players = _extract_players(game)
+
+    # 1) game.me is a player object?
+    try:
+        me_field = getattr(game, "me", None)
+    except Exception:
+        me_field = None
+    if me_field is not None and not isinstance(me_field, (int, float)):
+        me_obj = me_field
+        idx = None
+        for i, p in enumerate(players):
+            if p is me_obj or p == me_obj:
+                idx = i
+                break
+        return me_obj, idx
+
+    # 2) game.me is an index?
+    if isinstance(me_field, (int, float)):
+        i = int(me_field)
+        if 0 <= i < len(players):
+            return players[i], i
+        return None, i
+
+    # 3) explicit me_idx
+    try:
+        if me_idx is not None:
+            i = int(me_idx)
+            if 0 <= i < len(players):
+                return players[i], i
+            return None, i
+    except Exception:
+        pass
+
+    # 4) scan for flags
+    for i, p in enumerate(players):
+        try:
+            if getattr(p, "is_me", False) or getattr(p, "me", False):
+                return p, i
+            if isinstance(p, dict) and (p.get("is_me") or p.get("me")):
+                return p, i
+        except Exception:
+            continue
+
+    return None, None
+
+
+def find_me_idx(game: Any, me_idx: Any = None) -> Optional[int]:
+    """Return my index only."""
+    _, idx = find_me(game, me_idx)
+    return idx
+
+# -----------------------------------------------------------------------------
+# Public: scoring / capacity
+# -----------------------------------------------------------------------------
 
 def _player_score(p: Any) -> int:
-    """
-    Best-effort extraction of a player's score. Tries common attribute names.
-    Falls back to 0 if unknown.
-    """
+    """Best-effort extraction of a player's score."""
     for name in ("score", "victory_points", "victoryPoints", "vp", "points"):
         try:
             v = getattr(p, name, None)
@@ -129,7 +258,6 @@ def _player_score(p: Any) -> int:
                 return int(v)
         except Exception:
             continue
-    # If you later want to compute VP from piles, wire it here.
     return 0
 
 
@@ -140,7 +268,6 @@ def score_status(game: Any, me_idx: Any) -> Tuple[int, int]:
     me = safe_get_me(game, me_idx)
     my_score = _player_score(me) if me is not None else 0
 
-    # Get players list
     players = _get_attr_or_key(game, "players", "players_info", "playersInfos")
     best_opp = 0
     if isinstance(players, (list, tuple)):
@@ -191,94 +318,16 @@ def terminal_capacity(counts: Dict[str, int]) -> int:
 
     return plus_actions - terminals
 
+# -----------------------------------------------------------------------------
+# Public: coins
+# -----------------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# Module export list (safe even if __all__ didn't exist before)
-# ---------------------------------------------------------------------------
-
-try:
-    __all__  # type: ignore
-except NameError:
-    __all__ = []
-
-for _name in [
-    "in_stock", "in_stock_state", "best_from",
-    "safe_get_me", "score_status", "terminal_capacity",
-]:
-    if _name not in __all__:
-        __all__.append(_name)
-# --- Coin computation helpers -------------------------------------------------
-from typing import Any, Dict, Iterable
-
-# Base Dominion treasure values (extend if you use expansions)
 _TREASURE_VALUES: Dict[str, int] = {
     "copper": 1,
     "silver": 2,
     "gold": 3,
-    # Uncomment/extend if applicable:
-    # "platinum": 5,
+    # add "platinum": 5 if you ever use it
 }
-
-def _to_quantities_from_hand(hand_obj: Any) -> Dict[str, int]:
-    """
-    Normalize a player's hand into {card_name_lower: count}.
-    Supports:
-      - hand.quantities (dict-like)
-      - hand as a list/tuple of card names
-      - hand as a dict {card_name: count}
-    """
-    # Case 1: object with .quantities
-    qty = getattr(hand_obj, "quantities", None)
-    if isinstance(qty, dict):
-        return {str(k).lower(): int(v) for k, v in qty.items()}
-
-    # Case 2: iterable of names
-    if isinstance(hand_obj, (list, tuple)):
-        out: Dict[str, int] = {}
-        for x in hand_obj:
-            k = str(x).lower()
-            out[k] = out.get(k, 0) + 1
-        return out
-
-    # Case 3: already a dict
-    if isinstance(hand_obj, dict):
-        return {str(k).lower(): int(v) for k, v in hand_obj.items()}
-
-    return {}
-
-def _extract_player_hand(game_or_state: Any, me_idx: Any) -> Any:
-    """Return a 'hand' object from a Game-like or state dict."""
-    # Prefer a direct 'me' object with .hand
-    me = safe_get_me(game_or_state, me_idx)
-    if me is not None:
-        h = getattr(me, "hand", None) or (me.get("hand") if isinstance(me, dict) else None)
-        if h is not None:
-            return h
-
-    # Try game.me.hand if me_idx lookup failed
-    try:
-        me_obj = getattr(game_or_state, "me", None)
-        if me_obj is not None:
-            h = getattr(me_obj, "hand", None)
-            if h is not None:
-                return h
-    except Exception:
-        pass
-
-    # Try state dict path: state["game"]["players"][me_idx]["hand"]
-    if isinstance(game_or_state, dict):
-        g = game_or_state.get("game")
-        if g is not None:
-            try:
-                players = getattr(g, "players", None) or getattr(g, "players_info", None) or getattr(g, "playersInfos", None)
-                if players and 0 <= int(me_idx) < len(players):
-                    h = getattr(players[int(me_idx)], "hand", None)
-                    if h is not None:
-                        return h
-            except Exception:
-                pass
-
-    return None
 
 def compute_treasure_coins(game_or_state: Any, me_idx: Any) -> int:
     """
@@ -292,11 +341,9 @@ def compute_treasure_coins(game_or_state: Any, me_idx: Any) -> int:
         total += _TREASURE_VALUES.get(name, 0) * int(cnt)
     return total
 
+
 def compute_total_coins(game_or_state: Any, me_idx: Any, state: Any = None) -> int:
-    """
-    Treasures in hand + action coins from state (if provided).
-    Safe to call even if state is None or missing fields.
-    """
+    """Treasures in hand + action coins from state (if provided)."""
     base = compute_treasure_coins(game_or_state, me_idx)
     bonus = 0
     if isinstance(state, dict):
@@ -306,97 +353,105 @@ def compute_total_coins(game_or_state: Any, me_idx: Any, state: Any = None) -> i
             bonus = 0
     return base + bonus
 
-# Export
-try:
-    __all__.extend(["compute_treasure_coins", "compute_total_coins"])
-except Exception:
-    pass
-# --- Player lookup helpers ----------------------------------------------------
-from typing import Any, Optional, Tuple, List
+# -----------------------------------------------------------------------------
+# Public: hand helpers
+# -----------------------------------------------------------------------------
 
-def _extract_players(obj: Any) -> List[Any]:
-    """Return a players list from common shapes or [] if not found."""
-    try:
-        for name in ("players", "players_info", "playersInfos", "seats"):
-            pl = getattr(obj, name, None)
-            if isinstance(pl, (list, tuple)):
-                return list(pl)
-        if isinstance(obj, dict):
-            for name in ("players", "players_info", "playersInfos", "seats"):
-                pl = obj.get(name)
-                if isinstance(pl, (list, tuple)):
-                    return list(pl)
-    except Exception:
-        pass
-    return []
-
-def find_me(game: Any, me_idx: Any = None) -> Tuple[Optional[Any], Optional[int]]:
+def hand_counts(game_or_state: Any = None, me_idx: Any = None, hand_obj: Any = None) -> Dict[str, int]:
     """
-    Return (my_player_obj, my_index) in a best-effort way.
-
-    Tries, in order:
-      1) game.me is a player object  -> return it; try to resolve its index in players list
-      2) game.me is an int           -> use as index
-      3) provided me_idx             -> use as index into players
-      4) scan players for flags      -> player with .is_me or .me == True
-    Works with object- or dict-shaped game payloads.
+    Return current hand as {card: count} (lowercased).
+    You can pass either (game_or_state, me_idx) or a raw hand_obj.
     """
-    if game is None:
-        return None, None
+    if hand_obj is None:
+        hand_obj = _extract_player_hand(game_or_state, me_idx)
+    return _to_quantities_from_hand(hand_obj) if hand_obj is not None else {}
 
-    players = _extract_players(game)
 
-    # 1) game.me is already a player object?
-    try:
-        me_field = getattr(game, "me", None)
-    except Exception:
-        me_field = None
-    if me_field is not None and not isinstance(me_field, (int, float)):
-        me_obj = me_field
-        idx = None
-        # Try to find its index by identity or equality
-        for i, p in enumerate(players):
-            if p is me_obj or p == me_obj:
-                idx = i
-                break
-        return me_obj, idx
+def worst_in_hand(source: Any = None, me_idx: Any = None, policy: str = "trash") -> Optional[str]:
+    """
+    Pick the 'worst' card in hand according to a simple policy, for use by
+    trashers (e.g., Chapel/Remake), Remodel targets, or discards.
 
-    # 2) game.me is an index?
-    if isinstance(me_field, (int, float)):
-        i = int(me_field)
-        if 0 <= i < len(players):
-            return players[i], i
-        return None, i
+    Accepts either:
+      - source = game_or_state (with me_idx), OR
+      - source = dict hand-counts (already {card: count})
+    Returns a single card name (str) or None if hand empty.
 
-    # 3) explicit me_idx passed in?
-    try:
-        if me_idx is not None:
-            i = int(me_idx)
-            if 0 <= i < len(players):
-                return players[i], i
-            return None, i
-    except Exception:
-        pass
+    Policies:
+      - "trash"   : prioritize junk (curse > estate > copper > weak terminals)
+      - "remodel" : similar to trash but avoids 'curse' if remodel needs cost+2
+      - "discard" : prefers low-impact cards to pitch
+    """
+    # Get hand counts
+    if isinstance(source, dict) and (me_idx is None or not source):
+        q = {str(k).lower(): int(v) for k, v in source.items()}
+    else:
+        q = hand_counts(source, me_idx)
 
-    # 4) scan for a flagged player (is_me / me)
-    for i, p in enumerate(players):
-        try:
-            if getattr(p, "is_me", False) or getattr(p, "me", False):
-                return p, i
-            if isinstance(p, dict) and (p.get("is_me") or p.get("me")):
-                return p, i
-        except Exception:
+    if not q:
+        return None
+
+    # Scoring tables (lower score = worse / higher priority to remove)
+    base = {
+        "curse": -100,
+        "estate": -50,
+        "copper": -40,
+        # weak terminals / filler
+        "chancellor": -20,
+        "woodcutter": -18,
+        "bureaucrat": -16,
+        "poacher": -14,
+        "militia": -12,
+        "silver": -10,
+        # neutral / engine parts (higher -> keep)
+        "cellar": 0,
+        "village": 5,
+        "smithy": 6,
+        "market": 8,
+        "laboratory": 10,
+        "festival": 10,
+        "gold": 12,
+        "province": 50,
+        "duchy": 30,
+        "estate_vp": 5,  # alias if some engines rename it
+    }
+
+    # Adjust by policy
+    score = dict(base)
+    if policy == "remodel":
+        # If your Remodel expects gain-by-cost, curse may be useless -> slightly less priority
+        score["curse"] = -30
+    elif policy == "discard":
+        # Discard is softer; prefer pitching copper/estate/weak terminals
+        for k in ("curse", "estate", "copper", "chancellor", "woodcutter", "bureaucrat", "poacher", "militia"):
+            score[k] = score.get(k, -10) - 5
+
+    # Pick the card with the lowest score that's actually in hand
+    candidate = None
+    best_val = 10**9
+    for name, cnt in q.items():
+        if cnt <= 0:
             continue
+        val = score.get(name, 0)
+        if val < best_val:
+            best_val = val
+            candidate = name
 
-    return None, None
+    return candidate
 
-def find_me_idx(game: Any, me_idx: Any = None) -> Optional[int]:
-    """Return my index only (uses the same logic as find_me)."""
-    _, idx = find_me(game, me_idx)
-    return idx
+# -----------------------------------------------------------------------------
+# __all__ — make these names importable everywhere
+# -----------------------------------------------------------------------------
 
-# Export names if you keep __all__
-try:
-    __all__.extend(["find_me", "find_me_idx"])
-except Exception:
-    pass
+__all__ = [
+    # stock
+    "in_stock", "in_stock_state", "best_from",
+    # players
+    "safe_get_me", "find_me", "find_me_idx",
+    # scoring / capacity
+    "score_status", "terminal_capacity",
+    # coins
+    "compute_treasure_coins", "compute_total_coins",
+    # hand helpers
+    "hand_counts", "worst_in_hand",
+]
