@@ -107,19 +107,25 @@ def step_three(game: Game, coins: int) -> str | None:
 def step_last_resort_menu(game: Game, coins: int, counts: dict[str, int]) -> str | None:
     """
     Guarded priority menu; fully cost-aware; never buys copper.
+    Silver only as a single glue copy when no engine piece is affordable.
     """
     cap = terminal_capacity(counts)
-    ordered = ["market","festival","laboratory","village","smithy","silver"]
-    for card in ordered:
+    engine_order = ["market","festival","laboratory","village","farmingvillage","port","poacher","smithy","councilroom","library"]
+    for card in engine_order:
         if not in_stock(game, card):
             continue
-        if card == "smithy" and cap <= 0:
+        if card in ("smithy","councilroom","library") and cap <= 0:
             continue
         cost = COSTS.get(card, 99)
-        if coins < cost:
-            continue
-        return f"BUY {card}"
+        if coins >= cost:
+            return f"BUY {card}"
+
+    # One Silver maximum, only if nothing else was affordable
+    if counts.get("silver", 0) < 1 and in_stock(game, "silver") and coins >= COSTS.get("silver", 3):
+        return "BUY silver"
+
     return None
+
 
 # def step_last_resort_menu(game: Game, coins: int, counts: dict[str, int]) -> str | None:
 #     """
