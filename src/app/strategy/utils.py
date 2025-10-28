@@ -1,39 +1,42 @@
-# --- Compatibility shim: in_stock_state --------------------------------------
+# --- Supply helpers -----------------------------------------------------------
 from typing import Any
 
-def in_stock_state(state_or_game: Any, card: str) -> bool:
+def _extract_stock(obj: Any) -> dict:
     """
-    Return True if the supply pile for `card` has > 0 copies remaining.
-    Accepts:
-      - a Game (with .stock.quantities),
-      - a state dict with a 'game' entry,
-      - a dict that itself looks like stock/quantities (mapping card -> qty).
+    Try to obtain a {card_name: qty} mapping from different shapes:
+    - Game -> .stock.quantities (dict)
+    - dict with key 'stock' or already a {card: qty} dict
+    - state dict that contains a Game under 'game'
     """
     try:
-        # Case 1: Game-like
-        stock = getattr(getattr(state_or_game, "stock", None), "quantities", None)
+        stock = getattr(getattr(obj, "stock", None), "quantities", None)
         if isinstance(stock, dict):
-            return (stock or {}).get(card, 0) > 0
-
-        # Case 2: state dict -> game -> stock
-        if isinstance(state_or_game, dict):
-            game = state_or_game.get("game")
+            return stock
+        if isinstance(obj, dict):
+            game = obj.get("game")
             if game is not None:
                 stock = getattr(getattr(game, "stock", None), "quantities", None)
                 if isinstance(stock, dict):
-                    return (stock or {}).get(card, 0) > 0
-
-            # Case 3: raw quantities-like dict
-            maybe_qty = state_or_game.get("stock", state_or_game)
-            if isinstance(maybe_qty, dict):
-                return (maybe_qty or {}).get(card, 0) > 0
-
+                    return stock
+            maybe = obj.get("stock", obj)
+            if isinstance(maybe, dict):
+                return maybe
     except Exception:
         pass
+    return {}
 
-    return False
+def in_stock(game_or_state: Any, card: str) -> bool:
+    """True if the supply pile for `card` has > 0 copies remaining."""
+    stock = _extract_stock(game_or_state)
+    return int(stock.get(card.lower(), 0)) > 0
+
+# Backward-/side-compat shim: some callers import in_stock_state
+def in_stock_state(game_or_state: Any, card: str) -> bool:
+    return in_stock(game_or_state, card)
 
 try:
-    __all__.append("in_stock_state")  # if you use __all__
+    __all__.extend(["in_stock", "in_stock_state"])
 except Exception:
+    pass
+
     pass
