@@ -17,6 +17,88 @@ from .constants import (
 )
 from .utils import in_stock, terminal_capacity
 
+# === Strategy: combo_engine (draw + actions focus, no copper) ================
+from .utils import in_stock, terminal_capacity, score_status
+from .constants import (
+    BUY_PROVINCE_COINS, BUY_GOLD_COINS, BUY_5_COST_COINS, BUY_4_COST_COINS, BUY_SILVER_COINS,
+    MIN_GREEN_TURN, MIDGAME_PROVINCE_THRESHOLD, ENDGAME_PROVINCE_THRESHOLD, RUSH_TURN, MAX_SMITHIES, COSTS
+)
+
+def _combo_engine(game: Game, coins: int, me_idx: int, state: dict[str, object]) -> str:
+    """
+    Goals:
+      - Never buy Copper.
+      - Build max combos: prioritize +Actions +Cards; then +Actions/+Cards/+Coins (Market).
+      - If any opponent bought Witch and curses remain, buy Witch (up to 2).
+      - Use Bandit (<=2) as a Gold source when we have terminal capacity.
+      - Province when consistent (late, low Provinces, or stable engine).
+    """
+    counts: dict[str, int] = state["counts"]  # type: ignore[assignment]
+    turn = int(state.get("turn", 1))
+    cap = terminal_capacity(counts)
+    provinces_left = int(game.stock.quantities.get("province", 0))
+    curses_left = int(state.get("curses_left", game.stock.quantities.get("curse", 0)))
+    opp_has_witch = bool(state.get("opp_has_witch", False))
+
+    # VP pressure (late or piles low)
+    vp = _vp_pressure_fallback(game, coins, turn)
+    if vp:
+        return vp  # (never buys copper)
+
+    # Province when consistent or late
+    my, opp = score_status(game, me_idx)
+    engine_stable = (counts.get("laboratory", 0) >= 2) or ((counts.get("market", 0) + counts.get("festival", 0)) >= 3)
+    if coins >= BUY_PROVINCE_COINS and in_stock(game, "province"):
+        if turn >= MIN_GREEN_TURN or provinces_left <= MIDGAME_PROVINCE_THRESHOLD or engine_stable or (my - opp >= 6):
+            return "BUY province"
+
+    # Mirror Witch if opponent has one and curses remain (cap 2; respect terminal capacity)
+    if coins >= BUY_5_COST_COINS and opp_has_witch and curses_left > 0 and in_stock(game, "witch") and counts.get("witch", 0) < 2 and cap > 0:
+        return "BUY witch"
+
+    # Cheapest draw + actions first (combo unlockers)
+    if coins >= BUY_4_COST_COINS:
+        # Poacher (draw+coin+action) / Port / Village
+        for c in ("poacher", "port", "village"):
+            if in_stock(game, c):
+                # If we’re terminal-locked, Village first to unlock terminals
+                if c == "village" and cap <= 0:
+                    return "BUY village"
+                if c != "village":
+                    return f"BUY {c}"
+        if in_stock(game, "village") and cap <= 0:
+            return "BUY village"
+
+    # Stronger engine parts at 5: Market (card+action+coin+buy), then Lab (card+action), then Festival (+actions+buy+coin)
+    if coins >= BUY_5_COST_COINS:
+        for c in ("market", "laboratory", "festival"):
+            if in_stock(game, c):
+                return f"BUY {c}"
+        # Bandit: gold source + attack (needs capacity), cap 2
+        if in_stock(game, "bandit") and counts.get("bandit", 0) < 2 and cap > 0:
+            return "BUY bandit"
+
+    # Draw terminals only with capacity (Smithy) and soft cap
+    if coins >= BUY_4_COST_COINS and in_stock(game, "smithy") and counts.get("smithy", 0) < MAX_SMITHIES and cap > 0:
+        return "BUY smithy"
+
+    # Early smoothing: ensure 2 Silvers by turn 10 if we’re at 3–4 coins
+    if coins in (3, 4) and counts.get("silver", 0) < 2 and turn <= 10 and in_stock(game, "silver"):
+        return "BUY silver"
+
+    # Gold at 6 while building
+    if coins >= BUY_GOLD_COINS and in_stock(game, "gold"):
+        return "BUY gold"
+
+    # Last resort: more engine pieces we can afford (never copper)
+    for c in ("market", "laboratory", "festival", "village", "smithy", "silver"):
+        if in_stock(game, c) and coins >= COSTS.get(c, 99):
+            if c == "smithy" and cap <= 0:
+                continue
+            return f"BUY {c}"
+
+    return "END_TURN"
+
 # ---- Strategy signature ----
 BuyFn = Callable[[Game, int, int, dict[str, object]], str]
 
