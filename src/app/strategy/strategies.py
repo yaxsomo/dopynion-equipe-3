@@ -342,6 +342,7 @@ STRATEGY_BUYERS: dict[str, BuyFn] = {
     "village_smithy": _village_smithy,
     "militia_market_counter": _militia_market_counter,
     "remodel_market_engine": _remodel_market_engine,
+    "combo_engine": _combo_engine,
 }
 
 
