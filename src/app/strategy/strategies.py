@@ -24,80 +24,146 @@ from .constants import (
     MIN_GREEN_TURN, MIDGAME_PROVINCE_THRESHOLD, ENDGAME_PROVINCE_THRESHOLD, RUSH_TURN, MAX_SMITHIES, COSTS
 )
 
-def _combo_engine(game: Game, coins: int, me_idx: int, state: dict[str, object]) -> str:
+# === Strategy: combo_engine (draw + actions focus, no copper) ================
+from .utils import in_stock, terminal_capacity, score_status
+from .constants import (
+    COSTS,
+    BUY_PROVINCE_COINS, BUY_GOLD_COINS, BUY_5_COST_COINS, BUY_4_COST_COINS
+)
+
+def _combo_engine(game, coins: int, me_idx: int, state: dict[str, object]) -> str:
     """
     Goals:
       - Never buy Copper.
-      - Build max combos: prioritize +Actions +Cards; then +Actions/+Cards/+Coins (Market).
-      - If any opponent bought Witch and curses remain, buy Witch (up to 2).
-      - Use Bandit (<=2) as a Gold source when we have terminal capacity.
-      - Province when consistent (late, low Provinces, or stable engine).
+      - Build max combos: prioritize +Actions +Cards first (cheap -> expensive), then +Actions/+Cards/+Coins (Market/Festival).
+      - Mirror Witch if an opponent has one and curses remain (<= 2 copies, only with capacity).
+      - Use Bandit as a Gold source (<= 2) only after we have action capacity / stable engine.
+      - Keep Silver to at most 1 and only when no engine piece at that price.
+      - Avoid Militia/Silver spam.
     """
     counts: dict[str, int] = state["counts"]  # type: ignore[assignment]
     turn = int(state.get("turn", 1))
     cap = terminal_capacity(counts)
+
     provinces_left = int(game.stock.quantities.get("province", 0))
     curses_left = int(state.get("curses_left", game.stock.quantities.get("curse", 0)))
     opp_has_witch = bool(state.get("opp_has_witch", False))
 
-    # VP pressure (late or piles low)
-    vp = _vp_pressure_fallback(game, coins, turn)
-    if vp:
-        return vp  # (never buys copper)
+    # Current supply (booleans for readability)
+    has = lambda c: in_stock(game, c)
+    has_village = has("village")
+    has_fvillage = has("farmingvillage")
+    has_port    = has("port")
+    has_poacher = has("poacher")
+    has_market  = has("market")
+    has_labo    = has("laboratory")
+    has_fest    = has("festival")
+    has_smithy  = has("smithy")
+    has_croom   = has("councilroom")
+    has_library = has("library")
+    has_bandit  = has("bandit")
+    has_witch   = has("witch")
+    has_chapel  = has("chapel")
+    has_workshop= has("workshop")
+    has_remodel = has("remodel")
 
-    # Province when consistent or late
-    my, opp = score_status(game, me_idx)
-    engine_stable = (counts.get("laboratory", 0) >= 2) or ((counts.get("market", 0) + counts.get("festival", 0)) >= 3)
-    if coins >= BUY_PROVINCE_COINS and in_stock(game, "province"):
-        if turn >= MIN_GREEN_TURN or provinces_left <= MIDGAME_PROVINCE_THRESHOLD or engine_stable or (my - opp >= 6):
+    # Deck shape
+    terminals = (
+        counts.get("smithy",0) + counts.get("witch",0) + counts.get("militia",0) +
+        counts.get("bandit",0) + counts.get("bureaucrat",0) + counts.get("chancellor",0) +
+        counts.get("councilroom",0) + counts.get("library",0) + counts.get("adventurer",0)
+    )
+    plus_actions = (
+        counts.get("village",0) + counts.get("market",0) + counts.get("festival",0) +
+        counts.get("farmingvillage",0) + counts.get("port",0) + counts.get("poacher",0) +
+        counts.get("laboratory",0)   # non-terminal draw contributes 1 capacity in our heuristic
+    )
+    deficit = max(0, terminals - plus_actions)
+
+    engine_stable = (
+        (counts.get("market",0)+counts.get("laboratory",0)+counts.get("festival",0)) >= 3
+        or ( (counts.get("village",0)+counts.get("farmingvillage",0)+counts.get("port",0)) >= 2
+             and (counts.get("smithy",0)+counts.get("councilroom",0)+counts.get("library",0)) >= 1 )
+    )
+
+    # --- Provinces only when appropriate (late/low or stable engine/ahead)
+    my_score, opp_best = score_status(game, me_idx)
+    if coins >= BUY_PROVINCE_COINS and has("province"):
+        if provinces_left <= 5 or engine_stable or turn >= 10 or (my_score - opp_best) >= 6:
             return "BUY province"
 
-    # Mirror Witch if opponent has one and curses remain (cap 2; respect terminal capacity)
-    if coins >= BUY_5_COST_COINS and opp_has_witch and curses_left > 0 and in_stock(game, "witch") and counts.get("witch", 0) < 2 and cap > 0:
+    # --- Early trashing: Chapel opening if present
+    if has_chapel and counts.get("chapel",0) < 1 and coins in (2,3,4) and turn <= 2:
+        return "BUY chapel"
+
+    # --- Mirror Witch if opponent bought it and curses remain (<= 2 copies; needs capacity)
+    if coins >= BUY_5_COST_COINS and has_witch and opp_has_witch and curses_left > 0 and counts.get("witch",0) < 2 and cap > 0:
         return "BUY witch"
 
-    # Cheapest draw + actions first (combo unlockers)
-    if coins >= BUY_4_COST_COINS:
-        # Poacher (draw+coin+action) / Port / Village
-        for c in ("poacher", "port", "village"):
-            if in_stock(game, c):
-                # If we’re terminal-locked, Village first to unlock terminals
-                if c == "village" and cap <= 0:
-                    return "BUY village"
-                if c != "village":
-                    return f"BUY {c}"
-        if in_stock(game, "village") and cap <= 0:
-            return "BUY village"
+    # --- Fix action deficit first with the CHEAPEST +actions/+cards
+    if deficit > 0:
+        if coins >= BUY_4_COST_COINS:
+            # Start cheap and plentiful
+            for c in ("village", "farmingvillage", "port"):
+                if has(c): return f"BUY {c}"
+            if has_poacher: return "BUY poacher"
+        if coins >= BUY_5_COST_COINS:
+            # Then the 5-cost engines (prefer Market, then Festival, then Laboratory)
+            for c in ("market", "festival", "laboratory"):
+                if has(c): return f"BUY {c}"
 
-    # Stronger engine parts at 5: Market (card+action+coin+buy), then Lab (card+action), then Festival (+actions+buy+coin)
+    # --- Core engine growth (no deficit): add non-terminal draw & cantrips
     if coins >= BUY_5_COST_COINS:
         for c in ("market", "laboratory", "festival"):
-            if in_stock(game, c):
+            if has(c): return f"BUY {c}"
+    if coins >= BUY_4_COST_COINS:
+        for c in ("poacher", "port", "village", "farmingvillage"):
+            if has(c): return f"BUY {c}"
+
+    # --- Single terminal draw only when we have capacity
+    if cap > 0 and coins >= BUY_4_COST_COINS:
+        for c in ("smithy", "councilroom", "library"):
+            if has(c):
+                # Library can anti-synergize with many actions; limit to 1
+                if c == "library" and counts.get("library",0) >= 1:
+                    continue
                 return f"BUY {c}"
-        # Bandit: gold source + attack (needs capacity), cap 2
-        if in_stock(game, "bandit") and counts.get("bandit", 0) < 2 and cap > 0:
-            return "BUY bandit"
 
-    # Draw terminals only with capacity (Smithy) and soft cap
-    if coins >= BUY_4_COST_COINS and in_stock(game, "smithy") and counts.get("smithy", 0) < MAX_SMITHIES and cap > 0:
-        return "BUY smithy"
+    # --- Economy w/o killing the engine
+    # Optional openers to gain engine parts
+    if turn <= 3 and coins >= 3 and has_workshop and counts.get("workshop",0) < 1:
+        return "BUY workshop"
+    if turn <= 4 and coins >= 4 and has_remodel and counts.get("remodel",0) < 1:
+        return "BUY remodel"
 
-    # Early smoothing: ensure 2 Silvers by turn 10 if we’re at 3–4 coins
-    if coins in (3, 4) and counts.get("silver", 0) < 2 and turn <= 10 and in_stock(game, "silver"):
-        return "BUY silver"
+    # Bandit as a Gold source once we have capacity / some stability
+    if coins >= BUY_5_COST_COINS and has_bandit and cap > 0 and counts.get("bandit",0) < 2 and (engine_stable or plus_actions >= 2):
+        return "BUY bandit"
 
-    # Gold at 6 while building
-    if coins >= BUY_GOLD_COINS and in_stock(game, "gold"):
+    # Gold at 6 only once we have at least some engine
+    if coins >= BUY_GOLD_COINS and (plus_actions >= 2 or engine_stable) and has("gold"):
         return "BUY gold"
 
-    # Last resort: more engine pieces we can afford (never copper)
-    for c in ("market", "laboratory", "festival", "village", "smithy", "silver"):
-        if in_stock(game, c) and coins >= COSTS.get(c, 99):
-            if c == "smithy" and cap <= 0:
+    # One Silver maximum as glue at 3–4 when no engine card is available
+    if coins in (3,4) and counts.get("silver",0) < 1 and not any([
+        (coins >= BUY_4_COST_COINS and (has_village or has_fvillage or has_port or has_poacher)),
+        (coins >= BUY_5_COST_COINS and (has_market or has_labo or has_fest))
+    ]) and has("silver"):
+        return "BUY silver"
+
+    # Last resort: any engine piece we can afford (NEVER copper)
+    for c in ("market","laboratory","festival","village","farmingvillage","port","poacher","smithy","councilroom","library","silver","gold"):
+        if has(c) and coins >= COSTS.get(c, 99):
+            # still avoid terminal draw if no capacity
+            if c in ("smithy","councilroom","library") and cap <= 0:
+                continue
+            # avoid extra silver if we already have one and any engine is present
+            if c == "silver" and counts.get("silver",0) >= 1:
                 continue
             return f"BUY {c}"
 
     return "END_TURN"
+
 
 # ---- Strategy signature ----
 BuyFn = Callable[[Game, int, int, dict[str, object]], str]
