@@ -11,24 +11,16 @@ from .constants import (
     BUY_GOLD_COINS,
     BUY_PROVINCE_COINS,
     BUY_SILVER_COINS,
+    COSTS,
     ENDGAME_PROVINCE_THRESHOLD,
     MAX_SMITHIES,
     RUSH_TURN,
 )
 
 # === Strategy: combo_engine (draw + actions focus, no copper) ================
-from .utils import in_stock, terminal_capacity, score_status
-from .constants import (
-    BUY_PROVINCE_COINS, BUY_GOLD_COINS, BUY_5_COST_COINS, BUY_4_COST_COINS, BUY_SILVER_COINS,
-    MIN_GREEN_TURN, MIDGAME_PROVINCE_THRESHOLD, ENDGAME_PROVINCE_THRESHOLD, RUSH_TURN, MAX_SMITHIES, COSTS
-)
+from .utils import in_stock, score_status, terminal_capacity
 
 # === Strategy: combo_engine (draw + actions focus, no copper) ================
-from .utils import in_stock, terminal_capacity, score_status
-from .constants import (
-    COSTS,
-    BUY_PROVINCE_COINS, BUY_GOLD_COINS, BUY_5_COST_COINS, BUY_4_COST_COINS
-)
 
 def _combo_engine(game, coins: int, me_idx: int, state: dict[str, object]) -> str:
     """

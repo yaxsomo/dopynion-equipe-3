@@ -1,6 +1,6 @@
 from __future__ import annotations
+
 from dopynion.data_model import Game
-from .constants import BUY_GOLD_COINS
 
 from .buys import (
     early_province_ok,
@@ -15,8 +15,8 @@ from .buys import (
 )
 from .constants import (
     BUY_4_COST_COINS,
+    BUY_GOLD_COINS,
     BUY_PROVINCE_COINS,
-    BUY_SILVER_COINS,
     RUSH_TURN,
 )
 from .state import BuyCtx

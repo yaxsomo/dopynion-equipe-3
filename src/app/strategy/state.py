@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict
+
 
 # --- Context object expected by older pipeline/strategies ---------------------
 # Keep it minimal but compatible with existing code.
@@ -14,7 +14,7 @@ class BuyCtx:
 
 # --- Per-game, in-memory state ------------------------------------------------
 # Keys are X-Game-Id; values are dicts mutated across a single match.
-TURN_STATE: Dict[str, Dict[str, object]] = defaultdict(
+TURN_STATE: dict[str, dict[str, object]] = defaultdict(
     lambda: {
         "turn": 1,
         "phase": "ACTION",           # optional, used by logs/heuristics
@@ -30,12 +30,12 @@ TURN_STATE: Dict[str, Dict[str, object]] = defaultdict(
     }
 )
 
-def get(game_id: str) -> Dict[str, object]:
+def get(game_id: str) -> dict[str, object]:
     """Return the mutable state dict for a given game id; create if missing."""
     return TURN_STATE[game_id]
 
 # Back-compat alias (some modules use get_state instead of get)
-def get_state(game_id: str) -> Dict[str, object]:
+def get_state(game_id: str) -> dict[str, object]:
     return get(game_id)
 
 def reset_for_new_turn(game_id: str) -> None:
@@ -50,4 +50,4 @@ def reset_for_new_turn(game_id: str) -> None:
     st["buys_left"] = 1
     st["initialized_resources"] = False
 
-__all__ = ["BuyCtx", "TURN_STATE", "get", "get_state", "reset_for_new_turn"]
+__all__ = ["TURN_STATE", "BuyCtx", "get", "get_state", "reset_for_new_turn"]

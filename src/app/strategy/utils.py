@@ -13,7 +13,8 @@ Exports (so your imports won't break again):
 All functions are defensive: they accept object- or dict-shaped game payloads.
 """
 
-from typing import Any, Iterable, Optional, Tuple, Dict, List
+from collections.abc import Iterable
+from typing import Any
 
 # -----------------------------------------------------------------------------
 # Low-level helpers (introspect game/state shapes)
@@ -31,7 +32,7 @@ def _get_attr_or_key(obj: Any, *names: str):
     return None
 
 
-def _extract_players(obj: Any) -> List[Any]:
+def _extract_players(obj: Any) -> list[Any]:
     """Return a players list from common shapes or [] if not found."""
     try:
         for name in ("players", "players_info", "playersInfos", "seats"):
@@ -107,7 +108,7 @@ def _extract_player_hand(game_or_state: Any, me_idx: Any) -> Any:
     return None
 
 
-def _to_quantities_from_hand(hand_obj: Any) -> Dict[str, int]:
+def _to_quantities_from_hand(hand_obj: Any) -> dict[str, int]:
     """
     Normalize a 'hand' into {card_name_lower: count}.
     Supports:
@@ -120,7 +121,7 @@ def _to_quantities_from_hand(hand_obj: Any) -> Dict[str, int]:
         return {str(k).lower(): int(v) for k, v in qty.items()}
 
     if isinstance(hand_obj, (list, tuple)):
-        out: Dict[str, int] = {}
+        out: dict[str, int] = {}
         for x in hand_obj:
             k = str(x).lower()
             out[k] = out.get(k, 0) + 1
@@ -145,7 +146,7 @@ def in_stock_state(game_or_state: Any, card: str) -> bool:  # alias
     return in_stock(game_or_state, card)
 
 
-def best_from(game_or_state: Any, candidates: Iterable[str]) -> Optional[str]:
+def best_from(game_or_state: Any, candidates: Iterable[str]) -> str | None:
     """Return the first in-stock card among candidates, else None."""
     for c in candidates:
         if in_stock(game_or_state, c):
@@ -156,7 +157,7 @@ def best_from(game_or_state: Any, candidates: Iterable[str]) -> Optional[str]:
 # Public: player access
 # -----------------------------------------------------------------------------
 
-def safe_get_me(game: Any, me_idx: Any) -> Optional[Any]:
+def safe_get_me(game: Any, me_idx: Any) -> Any | None:
     """
     Best-effort retrieval of 'my' player object from a Game or game-like dict.
     """
@@ -188,7 +189,7 @@ def safe_get_me(game: Any, me_idx: Any) -> Optional[Any]:
     return None
 
 
-def find_me(game: Any, me_idx: Any = None) -> Tuple[Optional[Any], Optional[int]]:
+def find_me(game: Any, me_idx: Any = None) -> tuple[Any | None, int | None]:
     """
     Return (my_player_obj, my_index) best-effort. Robust to various shapes.
     """
@@ -238,7 +239,7 @@ def find_me(game: Any, me_idx: Any = None) -> Tuple[Optional[Any], Optional[int]
     return None, None
 
 
-def find_me_idx(game: Any, me_idx: Any = None) -> Optional[int]:
+def find_me_idx(game: Any, me_idx: Any = None) -> int | None:
     """Return my index only."""
     _, idx = find_me(game, me_idx)
     return idx
@@ -261,7 +262,7 @@ def _player_score(p: Any) -> int:
     return 0
 
 
-def score_status(game: Any, me_idx: Any) -> Tuple[int, int]:
+def score_status(game: Any, me_idx: Any) -> tuple[int, int]:
     """
     Returns (my_score, best_opponent_score). Robust to different Game shapes.
     """
@@ -278,7 +279,7 @@ def score_status(game: Any, me_idx: Any) -> Tuple[int, int]:
     return my_score, best_opp
 
 
-def terminal_capacity(counts: Dict[str, int]) -> int:
+def terminal_capacity(counts: dict[str, int]) -> int:
     """
     Heuristic 'action capacity' of the deck:
     +Actions producers (approx) minus number of terminal action cards.
@@ -322,7 +323,7 @@ def terminal_capacity(counts: Dict[str, int]) -> int:
 # Public: coins
 # -----------------------------------------------------------------------------
 
-_TREASURE_VALUES: Dict[str, int] = {
+_TREASURE_VALUES: dict[str, int] = {
     "copper": 1,
     "silver": 2,
     "gold": 3,
@@ -357,7 +358,7 @@ def compute_total_coins(game_or_state: Any, me_idx: Any, state: Any = None) -> i
 # Public: hand helpers
 # -----------------------------------------------------------------------------
 
-def hand_counts(game_or_state: Any = None, me_idx: Any = None, hand_obj: Any = None) -> Dict[str, int]:
+def hand_counts(game_or_state: Any = None, me_idx: Any = None, hand_obj: Any = None) -> dict[str, int]:
     """
     Return current hand as {card: count} (lowercased).
     You can pass either (game_or_state, me_idx) or a raw hand_obj.
@@ -367,7 +368,7 @@ def hand_counts(game_or_state: Any = None, me_idx: Any = None, hand_obj: Any = N
     return _to_quantities_from_hand(hand_obj) if hand_obj is not None else {}
 
 
-def worst_in_hand(source: Any = None, me_idx: Any = None, policy: str = "trash") -> Optional[str]:
+def worst_in_hand(source: Any = None, me_idx: Any = None, policy: str = "trash") -> str | None:
     """
     Pick the 'worst' card in hand according to a simple policy, for use by
     trashers (e.g., Chapel/Remake), Remodel targets, or discards.
